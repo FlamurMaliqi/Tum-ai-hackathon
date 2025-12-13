@@ -35,6 +35,7 @@ class Message:
 # Safety limit to keep a single conversation bounded.
 DEFAULT_MAX_MESSAGES_PER_CONVERSATION = 200
 
+TEST_INITIAL_MESSAGE: str = "Hello, My name is TROY"
 
 _lock = asyncio.Lock()
 _history_by_conversation: Dict[str, List[Message]] = {}
