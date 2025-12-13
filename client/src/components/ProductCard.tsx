@@ -40,11 +40,15 @@ export function ProductCard({ product }: ProductCardProps) {
       <div className="flex items-center justify-between mb-3">
         <div>
           <span className="text-xl font-bold">
-            €{product.price.toFixed(2)}
+            {product.price != null && product.price > 0 
+              ? `€${product.price.toFixed(2)}` 
+              : "Preis auf Anfrage"}
           </span>
-          <span className="text-sm text-muted-foreground ml-1">
-            / {product.unit}
-          </span>
+          {product.price != null && product.price > 0 && (
+            <span className="text-sm text-muted-foreground ml-1">
+              / {product.unit}
+            </span>
+          )}
         </div>
         <span className="text-xs text-muted-foreground bg-secondary px-2 py-1 rounded-lg">
           {product.category}

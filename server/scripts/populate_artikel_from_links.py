@@ -64,6 +64,20 @@ PRODUCT_BAUSTELLE = {
     "Schleifscheibe": "Alle",
 }
 
+# Product name to price mapping (example prices in EUR)
+PRODUCT_PRICES = {
+    "Magnetischer Bithalter": 1.90,
+    "Porenbetondübel": 0.85,
+    "Bohrhammer": 250.00,
+    "Sicherheitsbrille": 12.50,
+    "Schutzbrille": 12.50,
+    "Kreissägeblatt": 8.90,
+    "Edelstahlband": 4.50,
+    "Messband": 15.00,
+    "Kabelbinder": 0.15,
+    "Schleifscheibe": 3.20,
+}
+
 def generate_artikel_id(supplier: str, product_name: str, index: int) -> str:
     """Generate a unique artikel_id for a product from a supplier."""
     # Create a short prefix from supplier (W for Würth, H for Hilti)
@@ -111,8 +125,10 @@ def main():
             verbrauchsart = PRODUCT_VERBRAUCHSART.get(normalized_name, "Einweg")
             typische_baustelle = PRODUCT_BAUSTELLE.get(normalized_name, "Alle")
             
-            # Default values for fields we don't have
-            preis_eur = "NULL"  # Price not available in links.json
+            # Get price from mapping, or use NULL if not available
+            preis_value = PRODUCT_PRICES.get(normalized_name)
+            preis_eur = str(preis_value) if preis_value is not None else "NULL"
+            
             lagerort = "'Container A'"  # Default storage location
             gefahrgut = "false"  # Assume not hazardous
             
