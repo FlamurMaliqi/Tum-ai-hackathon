@@ -35,11 +35,10 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 async def get_ai_response(user_text: str):
     """
-    MOCK: Returns a simple echo response.
+    MOCK: Just echoes the input text back.
     Replace this with your Claude streaming service.
     """
-    response = f"You said: {user_text}. This is a mock response."
-    for word in response.split():
+    for word in user_text.split():
         yield word + " "
         await asyncio.sleep(0.05)
 # =============================================================================

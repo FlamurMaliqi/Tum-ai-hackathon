@@ -26,7 +26,7 @@ async def stream_tts(text_iterator):
     """
     api_key = os.getenv("ELEVENLABS_API_KEY")
     voice_id = os.getenv("ELEVENLABS_VOICE_ID", DEFAULT_VOICE_ID)
-    model_id = "eleven_multilingual_v2"
+    model_id = "eleven_turbo_v2_5"  # Faster model
     
     uri = f"wss://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream-input?model_id={model_id}&output_format=mp3_44100_128"
     
@@ -34,7 +34,7 @@ async def stream_tts(text_iterator):
         # Send initial config (BOS - Beginning of Stream)
         await ws.send(json.dumps({
             "text": " ",
-            "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
+            "voice_settings": {"stability": 0.7, "similarity_boost": 0.85, "speed": 1.15},
             "xi_api_key": api_key
         }))
         
