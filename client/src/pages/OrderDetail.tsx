@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BottomNav } from "@/components/BottomNav";
 import { OrderCard } from "@/components/OrderCard";
@@ -66,6 +66,17 @@ export default function OrderDetail() {
             </div>
           </div>
         </div>
+
+        {/* Admin Notes Section */}
+        {order.adminNotes && (
+          <div className="mt-4 bg-card rounded-2xl border border-border/50 p-4 card-shadow">
+            <div className="flex items-center gap-2 mb-3">
+              <FileText className="h-4 w-4 text-primary" />
+              <h3 className="font-semibold">Admin-Notizen</h3>
+            </div>
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{order.adminNotes}</p>
+          </div>
+        )}
       </main>
 
       <BottomNav />

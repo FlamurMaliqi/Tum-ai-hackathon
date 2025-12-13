@@ -17,6 +17,7 @@ export interface Order {
   status: OrderStatus;
   createdAt: Date;
   updatedAt: Date;
+  adminNotes?: string;
 }
 
 export const mockOrders: Order[] = [

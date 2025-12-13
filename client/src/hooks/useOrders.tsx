@@ -5,7 +5,7 @@ import { CartItem } from "./useCart";
 interface OrdersContextType {
   orders: Order[];
   addOrder: (items: CartItem[], foremanName: string, projectName: string) => Order;
-  updateOrderStatus: (orderId: string, status: OrderStatus) => void;
+  updateOrderStatus: (orderId: string, status: OrderStatus, notes?: string) => void;
 }
 
 const OrdersContext = createContext<OrdersContextType | undefined>(undefined);
@@ -34,11 +34,11 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
     return newOrder;
   };
 
-  const updateOrderStatus = (orderId: string, status: OrderStatus) => {
+  const updateOrderStatus = (orderId: string, status: OrderStatus, notes?: string) => {
     setOrders((prev) =>
       prev.map((order) =>
         order.id === orderId
-          ? { ...order, status, updatedAt: new Date() }
+          ? { ...order, status, updatedAt: new Date(), adminNotes: notes || order.adminNotes }
           : order
       )
     );

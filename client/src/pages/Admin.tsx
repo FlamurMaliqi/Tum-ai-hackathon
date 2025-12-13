@@ -1,14 +1,50 @@
-import { useState } from "react";
-import { ArrowLeft, Lock, Check, X } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { ArrowLeft, Lock, Check, X, Mic, MicOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { OrderCard } from "@/components/OrderCard";
 import { useOrders } from "@/hooks/useOrders";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 const ADMIN_PIN = "1234";
+
+// Speech Recognition types
+interface SpeechRecognitionEvent {
+  results: {
+    [index: number]: {
+      [index: number]: {
+        transcript: string;
+      };
+      isFinal: boolean;
+    };
+    length: number;
+  };
+}
+
+interface SpeechRecognitionErrorEvent {
+  error: string;
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start: () => void;
+  stop: () => void;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onend: (() => void) | null;
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition: new () => SpeechRecognition;
+    webkitSpeechRecognition: new () => SpeechRecognition;
+  }
+}
 
 export default function Admin() {
   const navigate = useNavigate();
@@ -18,6 +54,63 @@ export default function Admin() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [error, setError] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
+  const [adminNotes, setAdminNotes] = useState("");
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+
+  // Initialize speech recognition
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = true;
+      recognitionRef.current.lang = "de-DE";
+
+      recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
+        let transcript = "";
+        for (let i = 0; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        setAdminNotes(transcript);
+      };
+
+      recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
+        console.error("Speech recognition error:", event.error);
+        setIsListening(false);
+      };
+
+      recognitionRef.current.onend = () => {
+        setIsListening(false);
+      };
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, []);
+
+  const toggleVoiceInput = () => {
+    if (!recognitionRef.current) {
+      toast({
+        title: "Nicht unterstützt",
+        description: "Spracherkennung wird in diesem Browser nicht unterstützt.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      setAdminNotes(""); // Clear previous notes when starting new voice input
+      recognitionRef.current.start();
+      setIsListening(true);
+    }
+  };
 
   const handlePinSubmit = () => {
     if (pin === ADMIN_PIN) {
@@ -30,23 +123,33 @@ export default function Admin() {
   };
 
   const handleApprove = (orderId: string) => {
-    updateOrderStatus(orderId, "approved");
+    updateOrderStatus(orderId, "approved", adminNotes || undefined);
     toast({
       title: "Bestellung genehmigt",
       description: `Bestellung ${orderId} wurde genehmigt.`,
     });
     setSelectedOrder(null);
+    setAdminNotes("");
   };
 
   const handleReject = (orderId: string) => {
-    updateOrderStatus(orderId, "rejected");
+    updateOrderStatus(orderId, "rejected", adminNotes || undefined);
     toast({
       title: "Bestellung abgelehnt",
       description: `Bestellung ${orderId} wurde abgelehnt.`,
       variant: "destructive",
     });
     setSelectedOrder(null);
+    setAdminNotes("");
   };
+
+  // Reset notes when selecting a different order
+  useEffect(() => {
+    if (selectedOrder) {
+      const order = orders.find((o) => o.id === selectedOrder);
+      setAdminNotes(order?.adminNotes || "");
+    }
+  }, [selectedOrder, orders]);
 
   const pendingOrders = orders.filter((o) => o.status === "pending");
   const otherOrders = orders.filter((o) => o.status !== "pending");
@@ -138,6 +241,51 @@ export default function Admin() {
             </div>
           </div>
 
+          {/* Admin Notes Section */}
+          <div className="mt-4 bg-card rounded-2xl border border-border/50 p-4 card-shadow">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold">Notizen</h3>
+              <Button
+                variant={isListening ? "destructive" : "outline"}
+                size="sm"
+                className="rounded-xl gap-2"
+                onClick={toggleVoiceInput}
+              >
+                {isListening ? (
+                  <>
+                    <MicOff className="h-4 w-4" />
+                    Stoppen
+                  </>
+                ) : (
+                  <>
+                    <Mic className="h-4 w-4" />
+                    Spracheingabe
+                  </>
+                )}
+              </Button>
+            </div>
+            {isListening && (
+              <div className="flex items-center gap-2 mb-3 text-sm text-destructive">
+                <span className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
+                Aufnahme läuft...
+              </div>
+            )}
+            <Textarea
+              value={adminNotes}
+              onChange={(e) => setAdminNotes(e.target.value)}
+              placeholder="Optionale Notizen zur Bestellung hinzufügen..."
+              className="min-h-[100px] rounded-xl bg-secondary border-0 resize-none"
+            />
+          </div>
+
+          {/* Display existing notes if order was already processed */}
+          {selected.adminNotes && selected.status !== "pending" && (
+            <div className="mt-4 bg-card rounded-2xl border border-border/50 p-4 card-shadow">
+              <h3 className="font-semibold mb-3">Admin-Notizen</h3>
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{selected.adminNotes}</p>
+            </div>
+          )}
+
           {selected.status === "pending" && (
             <div className="fixed bottom-0 left-0 right-0 glass border-t border-border/50 p-4 safe-bottom">
               <div className="flex gap-3">
@@ -192,7 +340,7 @@ export default function Admin() {
                   onClick={() => setSelectedOrder(order.id)}
                   className="cursor-pointer"
                 >
-                  <OrderCard order={order} />
+                  <OrderCard order={order} disableLink />
                 </div>
               ))}
             </div>
@@ -209,7 +357,7 @@ export default function Admin() {
                   onClick={() => setSelectedOrder(order.id)}
                   className="cursor-pointer"
                 >
-                  <OrderCard order={order} />
+                  <OrderCard order={order} disableLink />
                 </div>
               ))}
             </div>
