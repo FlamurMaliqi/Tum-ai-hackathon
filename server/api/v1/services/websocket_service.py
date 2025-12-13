@@ -88,6 +88,13 @@ async def handle_websocket(ws: WebSocket) -> None:
                         )
                         continue
 
+                    # Server-side proof that we received the text.
+                    try:
+                        client = f"{ws.client.host}:{ws.client.port}" if ws.client else "unknown"
+                    except Exception:
+                        client = "unknown"
+                    logger.info("ws user_message from %s: %s", client, user_text)
+
                     # If a stream is in progress, cancel it and start a new one.
                     await _cancel_stream(reason="new_user_message")
                     await ws.send_json({"type": "server_message", "text": f"ack: {user_text}"})

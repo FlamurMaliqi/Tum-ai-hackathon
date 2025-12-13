@@ -60,8 +60,9 @@
       function wsUrl() {
         // Use ws://localhost for dev; wss:// for https deployments.
         const proto = window.location.protocol === "https:" ? "wss" : "ws";
-        const host = window.location.host || "localhost:8000";
         // If you open this file directly (file://), host is empty; default to localhost:8000.
+        // If you're serving this HTML on a different port (e.g. 5173), we still want the API server (8000).
+        const host = window.location.port === "8000" ? window.location.host : "localhost:8000";
         return `${proto}://${host}/api/v1/websocket/`;
       }
 
