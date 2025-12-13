@@ -1,6 +1,8 @@
-from typing import List, Dict
+from typing import List, Dict, Optional
 from psycopg2.extras import RealDictCursor
 from ..data_access.database import get_db_connection
+from datetime import datetime
+import uuid
 
 def get_all_bestellungen_with_items() -> List[Dict]:
     """Retrieve all orders with their associated order items."""
@@ -51,6 +53,148 @@ def get_all_bestellungen_with_items() -> List[Dict]:
                 order['bestellpositionen'] = [dict(item) for item in items]
             
             return orders_list
+    finally:
+        conn.close()
+
+
+def create_bestellung(
+    polier_name: str,
+    projekt_name: str,
+    items: List[Dict],
+    erstellt_von: Optional[str] = None
+) -> Dict:
+    """
+    Create a new order with order items.
+    
+    Args:
+        polier_name: Foreman name
+        projekt_name: Project name
+        items: List of order items with artikel_id, artikel_name, menge, einheit, einzelpreis
+        erstellt_von: Optional user who created the order
+    
+    Returns:
+        Created order dictionary
+    """
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Generate order ID
+            bestell_id = f"ORD-{uuid.uuid4().hex[:8].upper()}"
+            
+            # Calculate total
+            gesamt_betrag = sum(item['menge'] * item['einzelpreis'] for item in items)
+            
+            # Determine status (auto-approve if under 100€)
+            status = 'approved' if gesamt_betrag < 100 else 'pending'
+            
+            # Insert order
+            cur.execute("""
+                INSERT INTO bestellungen (
+                    bestell_id, polier_name, projekt_name, gesamt_betrag, 
+                    status, erstellt_von
+                )
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING *
+            """, (bestell_id, polier_name, projekt_name, gesamt_betrag, status, erstellt_von))
+            
+            order = dict(cur.fetchone())
+            conn.commit()
+            
+            # Insert order items
+            for idx, item in enumerate(items, start=1):
+                gesamt_preis = item['menge'] * item['einzelpreis']
+                cur.execute("""
+                    INSERT INTO bestellpositionen (
+                        bestell_id, artikel_id, artikel_name, menge, einheit,
+                        einzelpreis, gesamt_preis, position_nummer
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    bestell_id,
+                    item['artikel_id'],
+                    item['artikel_name'],
+                    item['menge'],
+                    item['einheit'],
+                    item['einzelpreis'],
+                    gesamt_preis,
+                    idx
+                ))
+            
+            conn.commit()
+            
+            # Fetch the complete order with items
+            cur.execute("""
+                SELECT * FROM bestellungen WHERE bestell_id = %s
+            """, (bestell_id,))
+            order = dict(cur.fetchone())
+            
+            cur.execute("""
+                SELECT * FROM bestellpositionen 
+                WHERE bestell_id = %s 
+                ORDER BY position_nummer
+            """, (bestell_id,))
+            order['bestellpositionen'] = [dict(item) for item in cur.fetchall()]
+            
+            return order
+    finally:
+        conn.close()
+
+
+def update_bestellung_status(
+    bestell_id: str,
+    new_status: str,
+    genehmigt_von: Optional[str] = None,
+    admin_notizen: Optional[str] = None
+) -> Dict:
+    """
+    Update order status.
+    
+    Args:
+        bestell_id: Order ID
+        new_status: New status (pending, approved, rejected, delivered)
+        genehmigt_von: Optional user who approved/rejected
+        admin_notizen: Optional admin notes
+    
+    Returns:
+        Updated order dictionary
+    """
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Update order
+            if new_status in ['approved', 'rejected']:
+                cur.execute("""
+                    UPDATE bestellungen 
+                    SET status = %s, 
+                        genehmigt_von = %s,
+                        genehmigt_am = CURRENT_TIMESTAMP,
+                        admin_notizen = COALESCE(%s, admin_notizen),
+                        aktualisiert_am = CURRENT_TIMESTAMP
+                    WHERE bestell_id = %s
+                    RETURNING *
+                """, (new_status, genehmigt_von, admin_notizen, bestell_id))
+            else:
+                cur.execute("""
+                    UPDATE bestellungen 
+                    SET status = %s,
+                        admin_notizen = COALESCE(%s, admin_notizen),
+                        aktualisiert_am = CURRENT_TIMESTAMP
+                    WHERE bestell_id = %s
+                    RETURNING *
+                """, (new_status, admin_notizen, bestell_id))
+            
+            order = dict(cur.fetchone())
+            conn.commit()
+            
+            # Fetch order items
+            cur.execute("""
+                SELECT * FROM bestellpositionen 
+                WHERE bestell_id = %s 
+                ORDER BY position_nummer
+            """, (bestell_id,))
+            order['bestellpositionen'] = [dict(item) for item in cur.fetchall()]
+            
+            return order
     finally:
         conn.close()
 

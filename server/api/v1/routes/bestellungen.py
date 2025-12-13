@@ -1,65 +1,36 @@
 from fastapi import APIRouter, HTTPException, status
+from fastapi import Query
 from typing import List, Dict, Optional
 from pydantic import BaseModel
+from ..services.bestellungen_service import get_all_bestellungen_with_items, create_bestellung, update_bestellung_status
 from ..data_access.database import get_db_connection
 import json
+from datetime import datetime
 
 router = APIRouter(prefix="/bestellungen", tags=["bestellungen"])
 
 
 class OrderItem(BaseModel):
-    productId: str
-    name: str
-    quantity: int
-    unit: str
-    price: float  # Add price per unit
+    artikel_id: str
+    artikel_name: str
+    menge: int
+    einheit: str
+    einzelpreis: float
 
 
 class OrderCreate(BaseModel):
-    projekt_id: Optional[int] = None
+    polier_name: str
+    projekt_name: str
     items: List[OrderItem]
-    notes: Optional[str] = None
+    erstellt_von: Optional[str] = None
 
 
 @router.get("/")
 async def get_all_orders():
     """Get all orders with their details"""
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        query = """
-            SELECT 
-                b.id,
-                b.projekt_id,
-                bp.name as projekt_name,
-                b.items,
-                b.notes,
-                b.total_items,
-                b.total_price,
-                b.status,
-                b.created_at
-            FROM bestellungen b
-            LEFT JOIN bauprojekte bp ON b.projekt_id = bp.id
-            ORDER BY b.created_at DESC
-        """
-        
-        cursor.execute(query)
-        columns = [desc[0] for desc in cursor.description]
-        orders = []
-        
-        for row in cursor.fetchall():
-            order = dict(zip(columns, row))
-            # Convert timestamps to ISO format
-            if order.get('created_at'):
-                order['created_at'] = order['created_at'].isoformat()
-            orders.append(order)
-        
-        cursor.close()
-        conn.close()
-        
-        return {"orders": orders}
-    
+        orders = get_all_bestellungen_with_items()
+        return orders
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -68,50 +39,17 @@ async def get_all_orders():
 
 
 @router.get("/{order_id}")
-async def get_order(order_id: int):
+async def get_order(order_id: str):
     """Get a specific order by ID"""
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        all_orders = get_all_bestellungen_with_items()
+        order = next((o for o in all_orders if o['bestell_id'] == order_id), None)
         
-        query = """
-            SELECT 
-                b.id,
-                b.projekt_id,
-                bp.name as projekt_name,
-                bp.description as projekt_description,
-                bp.location as projekt_location,
-                b.items,
-                b.notes,
-                b.total_items,
-                b.total_price,
-                b.status,
-                b.created_at
-            FROM bestellungen b
-            LEFT JOIN bauprojekte bp ON b.projekt_id = bp.id
-            WHERE b.id = %s
-        """
-        
-        cursor.execute(query, (order_id,))
-        row = cursor.fetchone()
-        
-        if not row:
-            cursor.close()
-            conn.close()
+        if not order:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Order not found"
             )
-        
-        columns = [desc[0] for desc in cursor.description]
-        order = dict(zip(columns, row))
-        
-        # Convert timestamp to ISO format
-        if order.get('created_at'):
-            order['created_at'] = order['created_at'].isoformat()
-        
-        cursor.close()
-        conn.close()
         
         return order
     
@@ -128,59 +66,22 @@ async def get_order(order_id: int):
 async def create_order(order: OrderCreate):
     """Create a new order with automatic approval for orders under 100€"""
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        # Convert Pydantic models to dicts
+        items = [item.dict() for item in order.items]
         
-        # Calculate total price
-        total_price = sum(item.price * item.quantity for item in order.items)
-        total_items = sum(item.quantity for item in order.items)
-        
-        # Determine status based on total price
-        # Orders under 100€ are auto-approved, 100€+ require manual approval
-        if total_price < 100:
-            order_status = 'approved'
-            approval_message = "Auto-approved (under 100€)"
-        else:
-            order_status = 'pending'
-            approval_message = "Requires approval (100€ or more)"
-        
-        # Convert items to JSON
-        items_json = json.dumps([item.dict() for item in order.items])
-        
-        query = """
-            INSERT INTO bestellungen (projekt_id, items, notes, total_items, total_price, status)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            RETURNING id, projekt_id, items, notes, total_items, total_price, status, created_at
-        """
-        
-        cursor.execute(
-            query,
-            (
-                order.projekt_id,
-                items_json,
-                order.notes,
-                total_items,
-                total_price,
-                order_status
-            )
+        new_order = create_bestellung(
+            polier_name=order.polier_name,
+            projekt_name=order.projekt_name,
+            items=items,
+            erstellt_von=order.erstellt_von
         )
         
-        row = cursor.fetchone()
-        conn.commit()
-        
-        columns = [desc[0] for desc in cursor.description]
-        new_order = dict(zip(columns, row))
-        
-        # Convert timestamp to ISO format
-        if new_order.get('created_at'):
-            new_order['created_at'] = new_order['created_at'].isoformat()
-        
-        # Add approval message to response
-        new_order['approval_message'] = approval_message
-        new_order['requires_approval'] = order_status == 'pending'
-        
-        cursor.close()
-        conn.close()
+        # Add approval message
+        gesamt_betrag = float(new_order['gesamt_betrag'])
+        if gesamt_betrag < 100:
+            new_order['approval_message'] = "Auto-approved (under 100€)"
+        else:
+            new_order['approval_message'] = "Requires approval (100€ or more)"
         
         return new_order
     
@@ -192,9 +93,14 @@ async def create_order(order: OrderCreate):
 
 
 @router.put("/{order_id}/status")
-async def update_order_status(order_id: int, new_status: str):
+async def update_order_status(
+    order_id: str, 
+    new_status: str = Query(...),
+    genehmigt_von: Optional[str] = Query(None),
+    admin_notizen: Optional[str] = Query(None)
+):
     """Update order status (Admin only)"""
-    valid_statuses = ['pending', 'approved', 'completed', 'cancelled']
+    valid_statuses = ['pending', 'approved', 'rejected', 'delivered']
     
     if new_status not in valid_statuses:
         raise HTTPException(
@@ -203,32 +109,19 @@ async def update_order_status(order_id: int, new_status: str):
         )
     
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute(
-            "UPDATE bestellungen SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s RETURNING id, status",
-            (new_status, order_id)
+        updated_order = update_bestellung_status(
+            bestell_id=order_id,
+            new_status=new_status,
+            genehmigt_von=genehmigt_von,
+            admin_notizen=admin_notizen
         )
         
-        row = cursor.fetchone()
-        
-        if not row:
-            cursor.close()
-            conn.close()
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Order not found"
-            )
-        
-        conn.commit()
-        cursor.close()
-        conn.close()
-        
-        return {"id": row[0], "status": row[1], "message": "Order status updated successfully"}
+        return {
+            "bestell_id": updated_order['bestell_id'],
+            "status": updated_order['status'],
+            "message": "Order status updated successfully"
+        }
     
-    except HTTPException:
-        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -237,56 +130,24 @@ async def update_order_status(order_id: int, new_status: str):
 
 
 @router.put("/{order_id}/approve")
-async def approve_order(order_id: int):
+async def approve_order(order_id: str, genehmigt_von: Optional[str] = None, admin_notizen: Optional[str] = None):
     """Approve a pending order (Admin only) - Quick action endpoint"""
-    return await update_order_status(order_id, 'approved')
+    return await update_order_status(order_id, 'approved', genehmigt_von, admin_notizen)
 
 
 @router.put("/{order_id}/reject")
-async def reject_order(order_id: int):
+async def reject_order(order_id: str, genehmigt_von: Optional[str] = None, admin_notizen: Optional[str] = None):
     """Reject/cancel a pending order (Admin only) - Quick action endpoint"""
-    return await update_order_status(order_id, 'cancelled')
+    return await update_order_status(order_id, 'rejected', genehmigt_von, admin_notizen)
 
 
 @router.get("/pending")
 async def get_pending_orders():
     """Get all orders that require approval (status=pending)"""
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        query = """
-            SELECT 
-                b.id,
-                b.projekt_id,
-                bp.name as projekt_name,
-                b.items,
-                b.notes,
-                b.total_items,
-                b.total_price,
-                b.status,
-                b.created_at
-            FROM bestellungen b
-            LEFT JOIN bauprojekte bp ON b.projekt_id = bp.id
-            WHERE b.status = 'pending'
-            ORDER BY b.created_at DESC
-        """
-        
-        cursor.execute(query)
-        columns = [desc[0] for desc in cursor.description]
-        orders = []
-        
-        for row in cursor.fetchall():
-            order = dict(zip(columns, row))
-            # Convert timestamps to ISO format
-            if order.get('created_at'):
-                order['created_at'] = order['created_at'].isoformat()
-            orders.append(order)
-        
-        cursor.close()
-        conn.close()
-        
-        return {"orders": orders, "count": len(orders)}
+        all_orders = get_all_bestellungen_with_items()
+        pending_orders = [order for order in all_orders if order['status'] == 'pending']
+        return {"orders": pending_orders, "count": len(pending_orders)}
     
     except Exception as e:
         raise HTTPException(

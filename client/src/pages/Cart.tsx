@@ -1,92 +1,52 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Minus, Plus, Trash2, ShoppingBag } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BottomNav } from "@/components/BottomNav";
 import { useCart } from "@/hooks/useCart";
 import { useToast } from "@/hooks/use-toast";
-import { apiUrl } from "@/lib/api";
-
-interface Bauprojekt {
-  id: number;
-  name: string;
-  description: string;
-  location: string;
-  status: string;
-}
+import { useCreateOrder } from "@/hooks/useOrdersBackend";
 
 export default function Cart() {
   const navigate = useNavigate();
   const { items, updateQuantity, removeItem, clearCart, totalPrice } = useCart();
   const { toast } = useToast();
+  const createOrderMutation = useCreateOrder();
   
-  const [projects, setProjects] = useState<Bauprojekt[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
+  const [foremanName, setForemanName] = useState("Hans Müller");
+  const [projectName, setProjectName] = useState("Bauprojekt Mitte");
   const [orderNotes, setOrderNotes] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Fetch available projects
-  useEffect(() => {
-    const fetchProjects = async () => {
-      try {
-        const response = await fetch(apiUrl("/api/v1/bauprojekte/?status=active"));
-        if (response.ok) {
-          const data = await response.json();
-          setProjects(data.projects || []);
-        }
-      } catch (error) {
-        console.error("Failed to fetch projects:", error);
-      }
-    };
-    
-    fetchProjects();
-  }, []);
 
   const handleSubmitOrder = async () => {
     if (items.length === 0) return;
     
-    if (!selectedProjectId) {
+    if (!foremanName.trim() || !projectName.trim()) {
       toast({
-        title: "Projekt erforderlich",
-        description: "Bitte wählen Sie ein Bauprojekt aus.",
+        title: "Informationen erforderlich",
+        description: "Bitte geben Sie Polier-Name und Projekt-Name ein.",
         variant: "destructive",
       });
       return;
     }
 
-    setIsSubmitting(true);
-    
     try {
-      // Prepare order data
+      // Prepare order data in backend format
       const orderData = {
-        projekt_id: parseInt(selectedProjectId),
+        polier_name: foremanName.trim(),
+        projekt_name: projectName.trim(),
         items: items.map(item => ({
-          productId: item.product.id,
-          name: item.product.name,
-          quantity: item.quantity,
-          unit: item.product.unit,
-          price: item.product.price, // Include price for automatic approval calculation
+          artikel_id: item.product.id,
+          artikel_name: item.product.name,
+          menge: item.quantity,
+          einheit: item.product.unit,
+          einzelpreis: item.product.price,
         })),
-        notes: orderNotes || null,
+        erstellt_von: undefined, // Can be added later if user authentication is implemented
       };
 
-      // Submit order to backend
-      const response = await fetch(apiUrl("/api/v1/bestellungen/"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(orderData),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to submit order");
-      }
-
-      const newOrder = await response.json();
+      const newOrder = await createOrderMutation.mutateAsync(orderData);
       
       clearCart();
       
@@ -96,8 +56,8 @@ export default function Cart() {
       toast({
         title: isAutoApproved ? "Bestellung genehmigt" : "Bestellung eingereicht",
         description: isAutoApproved 
-          ? `Bestellung #${newOrder.id} wurde automatisch genehmigt (unter 100€).`
-          : `Bestellung #${newOrder.id} wartet auf Genehmigung (100€ oder mehr).`,
+          ? `Bestellung ${newOrder.id} wurde automatisch genehmigt (unter 100€).`
+          : `Bestellung ${newOrder.id} wartet auf Genehmigung (100€ oder mehr).`,
       });
       
       navigate("/orders");
@@ -105,11 +65,9 @@ export default function Cart() {
       console.error("Failed to submit order:", error);
       toast({
         title: "Fehler",
-        description: "Bestellung konnte nicht erstellt werden.",
+        description: error instanceof Error ? error.message : "Bestellung konnte nicht erstellt werden.",
         variant: "destructive",
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -150,32 +108,26 @@ export default function Cart() {
         <div className="bg-card rounded-2xl border border-border/50 p-4 mb-4 card-shadow">
           <h2 className="font-semibold mb-3">Bestellinformationen</h2>
           <div className="space-y-3">
-            {/* Project Selection */}
+            {/* Foreman Name */}
             <div>
-              <label className="text-sm text-muted-foreground">Bauprojekt *</label>
-              <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
-                <SelectTrigger className="mt-1 rounded-xl bg-secondary border-0">
-                  <SelectValue placeholder="Projekt auswählen" />
-                </SelectTrigger>
-                <SelectContent>
-                  {projects.length === 0 ? (
-                    <SelectItem value="none" disabled>
-                      Keine Projekte verfügbar
-                    </SelectItem>
-                  ) : (
-                    projects.map((project) => (
-                      <SelectItem key={project.id} value={project.id.toString()}>
-                        <div className="flex flex-col">
-                          <span className="font-medium">{project.name}</span>
-                          {project.location && (
-                            <span className="text-xs text-muted-foreground">{project.location}</span>
-                          )}
-                        </div>
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+              <label className="text-sm text-muted-foreground">Polier-Name *</label>
+              <Input
+                value={foremanName}
+                onChange={(e) => setForemanName(e.target.value)}
+                placeholder="z.B. Hans Müller"
+                className="mt-1 rounded-xl bg-secondary border-0"
+              />
+            </div>
+
+            {/* Project Name */}
+            <div>
+              <label className="text-sm text-muted-foreground">Projekt-Name *</label>
+              <Input
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                placeholder="z.B. Bauprojekt Mitte"
+                className="mt-1 rounded-xl bg-secondary border-0"
+              />
             </div>
 
             {/* Notes */}
@@ -246,10 +198,10 @@ export default function Cart() {
         </div>
         <Button
           onClick={handleSubmitOrder}
-          disabled={isSubmitting || !selectedProjectId}
+          disabled={createOrderMutation.isPending || !foremanName.trim() || !projectName.trim()}
           className="w-full h-12 rounded-xl text-base"
         >
-          {isSubmitting ? "Wird gesendet..." : "Bestellung aufgeben"}
+          {createOrderMutation.isPending ? "Wird gesendet..." : "Bestellung aufgeben"}
         </Button>
       </div>
 
