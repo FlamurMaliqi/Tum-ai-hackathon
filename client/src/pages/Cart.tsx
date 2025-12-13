@@ -68,6 +68,7 @@ export default function Cart() {
           name: item.product.name,
           quantity: item.quantity,
           unit: item.product.unit,
+          price: item.product.price, // Include price for automatic approval calculation
         })),
         notes: orderNotes || null,
       };
@@ -89,9 +90,14 @@ export default function Cart() {
       
       clearCart();
       
+      // Show different messages based on approval status
+      const isAutoApproved = newOrder.status === 'approved';
+      
       toast({
-        title: "Bestellung aufgegeben",
-        description: `Bestellung #${newOrder.id} wurde erfolgreich erstellt.`,
+        title: isAutoApproved ? "Bestellung genehmigt" : "Bestellung eingereicht",
+        description: isAutoApproved 
+          ? `Bestellung #${newOrder.id} wurde automatisch genehmigt (unter 100€).`
+          : `Bestellung #${newOrder.id} wartet auf Genehmigung (100€ oder mehr).`,
       });
       
       navigate("/orders");

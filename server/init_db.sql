@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS bestellungen (
     items JSONB NOT NULL,
     notes TEXT,
     total_items INTEGER DEFAULT 0,
+    total_price DECIMAL(10, 2) DEFAULT 0.00,
     status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'completed', 'cancelled')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

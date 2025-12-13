@@ -12,6 +12,7 @@ class OrderItem(BaseModel):
     name: str
     quantity: int
     unit: str
+    price: float  # Add price per unit
 
 
 class OrderCreate(BaseModel):
@@ -35,6 +36,7 @@ async def get_all_orders():
                 b.items,
                 b.notes,
                 b.total_items,
+                b.total_price,
                 b.status,
                 b.created_at
             FROM bestellungen b
@@ -82,6 +84,7 @@ async def get_order(order_id: int):
                 b.items,
                 b.notes,
                 b.total_items,
+                b.total_price,
                 b.status,
                 b.created_at
             FROM bestellungen b
@@ -123,19 +126,31 @@ async def get_order(order_id: int):
 
 @router.post("/")
 async def create_order(order: OrderCreate):
-    """Create a new order"""
+    """Create a new order with automatic approval for orders under 100€"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Convert items to JSON
-        items_json = json.dumps([item.dict() for item in order.items])
+        # Calculate total price
+        total_price = sum(item.price * item.quantity for item in order.items)
         total_items = sum(item.quantity for item in order.items)
         
+        # Determine status based on total price
+        # Orders under 100€ are auto-approved, 100€+ require manual approval
+        if total_price < 100:
+            order_status = 'approved'
+            approval_message = "Auto-approved (under 100€)"
+        else:
+            order_status = 'pending'
+            approval_message = "Requires approval (100€ or more)"
+        
+        # Convert items to JSON
+        items_json = json.dumps([item.dict() for item in order.items])
+        
         query = """
-            INSERT INTO bestellungen (projekt_id, items, notes, total_items, status)
-            VALUES (%s, %s, %s, %s, %s)
-            RETURNING id, projekt_id, items, notes, total_items, status, created_at
+            INSERT INTO bestellungen (projekt_id, items, notes, total_items, total_price, status)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id, projekt_id, items, notes, total_items, total_price, status, created_at
         """
         
         cursor.execute(
@@ -145,7 +160,8 @@ async def create_order(order: OrderCreate):
                 items_json,
                 order.notes,
                 total_items,
-                'pending'
+                total_price,
+                order_status
             )
         )
         
@@ -158,6 +174,10 @@ async def create_order(order: OrderCreate):
         # Convert timestamp to ISO format
         if new_order.get('created_at'):
             new_order['created_at'] = new_order['created_at'].isoformat()
+        
+        # Add approval message to response
+        new_order['approval_message'] = approval_message
+        new_order['requires_approval'] = order_status == 'pending'
         
         cursor.close()
         conn.close()
@@ -213,6 +233,65 @@ async def update_order_status(order_id: int, new_status: str):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update order status: {str(e)}"
+        )
+
+
+@router.put("/{order_id}/approve")
+async def approve_order(order_id: int):
+    """Approve a pending order (Admin only) - Quick action endpoint"""
+    return await update_order_status(order_id, 'approved')
+
+
+@router.put("/{order_id}/reject")
+async def reject_order(order_id: int):
+    """Reject/cancel a pending order (Admin only) - Quick action endpoint"""
+    return await update_order_status(order_id, 'cancelled')
+
+
+@router.get("/pending")
+async def get_pending_orders():
+    """Get all orders that require approval (status=pending)"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        query = """
+            SELECT 
+                b.id,
+                b.projekt_id,
+                bp.name as projekt_name,
+                b.items,
+                b.notes,
+                b.total_items,
+                b.total_price,
+                b.status,
+                b.created_at
+            FROM bestellungen b
+            LEFT JOIN bauprojekte bp ON b.projekt_id = bp.id
+            WHERE b.status = 'pending'
+            ORDER BY b.created_at DESC
+        """
+        
+        cursor.execute(query)
+        columns = [desc[0] for desc in cursor.description]
+        orders = []
+        
+        for row in cursor.fetchall():
+            order = dict(zip(columns, row))
+            # Convert timestamps to ISO format
+            if order.get('created_at'):
+                order['created_at'] = order['created_at'].isoformat()
+            orders.append(order)
+        
+        cursor.close()
+        conn.close()
+        
+        return {"orders": orders, "count": len(orders)}
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch pending orders: {str(e)}"
         )
 
 
