@@ -33,7 +33,7 @@ from typing import Any, Optional
 
 from fastapi import WebSocket, WebSocketDisconnect
 
-from ..data_access.anthropic.agent import stream_anthropic_response
+from .claude_service import ClaudeServiceError, stream_claude_reply
 
 logger = logging.getLogger(__name__)
 
@@ -111,13 +111,16 @@ async def handle_websocket(ws: WebSocket) -> None:
         await ws.send_json({"type": "assistant_start"})
 
         try:
-            # `stream_anthropic_response()` yields text chunks as they arrive.
-            async for text in stream_anthropic_response(user_text):
+            # `stream_claude_reply()` yields text chunks as they arrive.
+            async for text in stream_claude_reply(user_text=user_text):
                 if text:
                     await ws.send_json({"type": "assistant_token", "text": text})
         except asyncio.CancelledError:
             # Important: re-raise so upstream cancellation is respected.
             raise
+        except ClaudeServiceError:
+            # Provider errors are already logged in the service layer.
+            await ws.send_json({"type": "assistant_error", "message": "anthropic_stream_error"})
         except Exception:
             # Never let model/provider failures crash the WS handler loop.
             logger.exception("Anthropic stream error")
