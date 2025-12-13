@@ -1,3 +1,8 @@
+"""
+WebSocket Voice Assistant Service
+
+Flow: User text → Claude (streaming) → ElevenLabs TTS → Audio to client
+"""
 import asyncio
 import json
 import logging
@@ -5,132 +10,120 @@ from typing import Any, Optional
 
 from fastapi import WebSocket, WebSocketDisconnect
 
+from .tts_service import stream_tts
+
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# 🔧 TEAMMATE: REPLACE THIS FUNCTION WITH YOUR CLAUDE SERVICE
+# =============================================================================
+#
+# Requirements:
+#   - Must be an async generator (use 'async def' and 'yield')
+#   - Yield text chunks as strings (e.g., "Hello ", "world!")
+#   - Each chunk gets sent to ElevenLabs for speech synthesis
+#
+# Example integration:
+#
+#   from .your_claude_service import stream_claude_response
+#
+#   async def get_ai_response(user_text: str):
+#       async for chunk in stream_claude_response(user_text):
+#           yield chunk
+#
+# =============================================================================
+async def get_ai_response(user_text: str):
+    """
+    MOCK: Returns a simple echo response.
+    Replace this with your Claude streaming service.
+    """
+    response = f"You said: {user_text}. This is a mock response."
+    for word in response.split():
+        yield word + " "
+        await asyncio.sleep(0.05)
+# =============================================================================
 
 
 async def handle_websocket(ws: WebSocket) -> None:
     """
-    WebSocket session handler (service layer).
-
-    Keep this logic out of routing so we can extend it later (token/audio streaming,
-    auth, rooms, etc.) without refactoring the API surface.
-
-    - Bidirectional messaging (JSON text frames)
-    - Streaming responses (token frames emitted over time)
-    - Binary frames (placeholder for future audio streaming)
+    Main WebSocket handler.
+    
+    Client sends:    {"type": "user_message", "text": "Hello"}
+    Server sends:    {"type": "assistant_token", "text": "Hi "}  (text chunks)
+                     <binary audio chunks>
+                     {"type": "assistant_done", "full_text": "Hi there!"}
     """
     await ws.accept()
+    stream_task: Optional[asyncio.Task] = None
 
-    stream_task: Optional[asyncio.Task[None]] = None
-
-    async def _cancel_stream(reason: str = "interrupt") -> None:
+    async def cancel_stream():
         nonlocal stream_task
-        if stream_task is None or stream_task.done():
-            stream_task = None
-            return
-        stream_task.cancel()
-        try:
-            await stream_task
-        except asyncio.CancelledError:
-            pass
-        finally:
-            stream_task = None
-            # Let the client know the current stream was stopped.
+        if stream_task and not stream_task.done():
+            stream_task.cancel()
             try:
-                await ws.send_json({"type": "stream_cancelled", "reason": reason})
-            except Exception:
-                # If we're already disconnected/closing, ignore.
+                await stream_task
+            except asyncio.CancelledError:
                 pass
+        stream_task = None
 
-    async def _stream_assistant_response(user_text: str) -> None:
-        """
-        Token streaming scaffold. Replace this with your AI/token generator later
-        without changing the message envelope.
-        """
+    async def process_message(user_text: str) -> None:
+        """Pipeline: AI text stream → TTS → audio to client."""
         await ws.send_json({"type": "assistant_start"})
+        full_text = ""
+        
+        try:
+            async def text_stream():
+                nonlocal full_text
+                async for chunk in get_ai_response(user_text):
+                    full_text += chunk
+                    await ws.send_json({"type": "assistant_token", "text": chunk})
+                    yield chunk
+            
+            async for audio_chunk in stream_tts(text_stream()):
+                await ws.send_bytes(audio_chunk)
+                
+        except Exception as e:
+            logger.exception("Stream error")
+            await ws.send_json({"type": "error", "message": str(e)})
+        
+        await ws.send_json({"type": "assistant_done", "full_text": full_text})
 
-        # Placeholder "tokenization" so the client sees real-time streaming.
-        tokens = (user_text or "").strip().split() or ["(empty)"]
-        for tok in tokens:
-            await ws.send_json({"type": "assistant_token", "text": tok + " "})
-            await asyncio.sleep(0.08)
-
-        await ws.send_json({"type": "assistant_done"})
-
-        # Placeholder binary payload (future: raw audio bytes).
-        await ws.send_bytes(b"\x00\x01\x02\x03audio_placeholder")
-
+    # Main message loop
     try:
-        await ws.send_json({"type": "server_hello", "message": "connected"})
+        await ws.send_json({"type": "server_hello"})
 
         while True:
             frame: dict[str, Any] = await ws.receive()
-            frame_type = frame.get("type")
-
-            if frame_type == "websocket.disconnect":
+            
+            if frame.get("type") == "websocket.disconnect":
                 break
 
-            # Browser clients will send JSON in text frames.
             text = frame.get("text")
-            if text is not None:
-                try:
-                    msg = json.loads(text)
-                except json.JSONDecodeError:
-                    await ws.send_json({"type": "error", "message": "invalid_json"})
-                    continue
-
-                msg_type = msg.get("type")
-                if msg_type == "user_message":
-                    user_text = msg.get("text")
-                    if not isinstance(user_text, str):
-                        await ws.send_json(
-                            {"type": "error", "message": "user_message.text must be a string"}
-                        )
-                        continue
-
-                    # Server-side proof that we received the text.
-                    try:
-                        client = f"{ws.client.host}:{ws.client.port}" if ws.client else "unknown"
-                    except Exception:
-                        client = "unknown"
-                    logger.info("ws user_message from %s: %s", client, user_text)
-
-                    # If a stream is in progress, cancel it and start a new one.
-                    await _cancel_stream(reason="new_user_message")
-                    await ws.send_json({"type": "server_message", "text": f"ack: {user_text}"})
-                    stream_task = asyncio.create_task(_stream_assistant_response(user_text))
-                    continue
-
-                if msg_type == "interrupt":
-                    await _cancel_stream(reason="interrupt")
-                    await ws.send_json({"type": "server_message", "text": "interrupted"})
-                    continue
-
-                await ws.send_json({"type": "error", "message": "unknown_type"})
+            if not text:
+                continue
+                
+            try:
+                msg = json.loads(text)
+            except json.JSONDecodeError:
+                await ws.send_json({"type": "error", "message": "invalid_json"})
                 continue
 
-            # Binary frames are accepted (future: audio input). For now, just log size.
-            data = frame.get("bytes")
-            if data is not None:
-                await ws.send_json({"type": "binary_received", "bytes": len(data)})
-                continue
-
-            await ws.send_json({"type": "error", "message": "unsupported_frame"})
+            msg_type = msg.get("type")
+            
+            if msg_type == "user_message":
+                user_text = msg.get("text", "")
+                if user_text:
+                    await cancel_stream()
+                    stream_task = asyncio.create_task(process_message(user_text))
+            
+            elif msg_type == "interrupt":
+                await cancel_stream()
+                await ws.send_json({"type": "interrupted"})
 
     except WebSocketDisconnect:
-        # Client disconnected normally.
         pass
     except Exception:
-        logger.exception("WebSocket session error")
-        try:
-            await ws.close(code=1011)
-        except Exception:
-            pass
+        logger.exception("WebSocket error")
     finally:
-        # Ensure background stream is stopped.
-        try:
-            await _cancel_stream(reason="disconnect")
-        except Exception:
-            pass
-
-
+        await cancel_stream()
