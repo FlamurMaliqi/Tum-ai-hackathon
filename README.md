@@ -43,11 +43,61 @@ For processing transcribed voice input:
 }
 ```
 
+## Quick Start with Docker
+
+The easiest way to run everything is using Docker Compose:
+
+### Prerequisites
+
+1. **Docker** and **Docker Compose** installed
+2. **ElevenLabs API Key** (optional, for voice features):
+   - Get your API key from: https://elevenlabs.io/app/settings/api-keys
+   - Create a `.env` file in the project root (optional):
+     ```env
+     ELEVENLABS_API_KEY=your_api_key_here
+     ```
+
+### Run with Docker Compose
+
+```bash
+# Build and start all services
+docker compose up --build
+
+# Or run in detached mode
+docker compose up -d --build
+```
+
+This will start:
+- **Client** (React app) on http://localhost:3000
+- **Server** (FastAPI) on http://localhost:8000
+- **Database** (PostgreSQL) on localhost:5432
+
+### Stop services
+
+```bash
+docker compose down
+
+# To also remove volumes (clears database)
+docker compose down -v
+```
+
+### View logs
+
+```bash
+# All services
+docker compose logs -f
+
+# Specific service
+docker compose logs -f server
+docker compose logs -f client
+docker compose logs -f db
+```
+
 ## Server (FastAPI)
 
 ### Run the server
 
-From the repo root, run your FastAPI app (however you already run it). If you’re using the included entrypoint:
+From the repo root, run your FastAPI app (however you already run it). If you're using the included entrypoint:
 
 ```bash
 python3 server/main.py

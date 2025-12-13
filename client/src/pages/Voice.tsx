@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useCart } from "@/hooks/useCart";
 import { products } from "@/data/products";
 import { useScribe } from "@elevenlabs/react";
+import { apiUrl } from "@/lib/api";
 
 interface VoiceOrderItem {
   productId: string;
@@ -64,7 +65,7 @@ export default function Voice() {
       console.log("📡 Fetching token from backend...");
       
       // Fetch single-use token from backend
-      const response = await fetch("http://localhost:8001/api/v1/elevenlabs-token/");
+      const response = await fetch(apiUrl("/api/v1/elevenlabs-token/"));
       
       if (!response.ok) {
         console.error("❌ Token fetch failed:", response.status, response.statusText);
