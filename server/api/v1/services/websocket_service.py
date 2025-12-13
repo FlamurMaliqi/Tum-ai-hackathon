@@ -29,11 +29,13 @@ Binary frames are accepted and acknowledged (placeholder for future audio input)
 import asyncio
 import json
 import logging
+import uuid
 from typing import Any, Optional
 
 from fastapi import WebSocket, WebSocketDisconnect
 
 from .claude_service import ClaudeServiceError, stream_claude_reply
+from .message_history_service import append_message
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +62,9 @@ async def handle_websocket(ws: WebSocket) -> None:
     """
     # Accept immediately so the client can start sending frames.
     await ws.accept()
+
+    # A single websocket session maps to a single in-memory "conversation".
+    conversation_id = ws.query_params.get("conversation_id") or uuid.uuid4().hex
 
     # Background task that streams the assistant response to the client.
     stream_task: Optional[asyncio.Task[None]] = None
@@ -110,10 +115,14 @@ async def handle_websocket(ws: WebSocket) -> None:
         """
         await ws.send_json({"type": "assistant_start"})
 
+        assistant_text_parts: list[str] = []
         try:
             # `stream_claude_reply()` yields text chunks as they arrive.
-            async for text in stream_claude_reply(user_text=user_text):
+            async for text in stream_claude_reply(
+                user_text=user_text, conversation_id=conversation_id
+            ):
                 if text:
+                    assistant_text_parts.append(text)
                     await ws.send_json({"type": "assistant_token", "text": text})
         except asyncio.CancelledError:
             # Important: re-raise so upstream cancellation is respected.
@@ -127,6 +136,12 @@ async def handle_websocket(ws: WebSocket) -> None:
             await ws.send_json({"type": "assistant_error", "message": "anthropic_stream_error"})
         else:
             await ws.send_json({"type": "assistant_done"})
+            assistant_text = "".join(assistant_text_parts).strip()
+            if assistant_text:
+                # Persist the assistant message for future turns in this session.
+                await append_message(
+                    conversation_id=conversation_id, role="assistant", content=assistant_text
+                )
 
     async def _cancel_turn_timer() -> None:
         """
@@ -160,6 +175,9 @@ async def handle_websocket(ws: WebSocket) -> None:
             turn_buffer.clear()
         if not full_text:
             return
+
+        # Persist the user's turn as a single message (turn buffering is WS-owned).
+        await append_message(conversation_id=conversation_id, role="user", content=full_text)
 
         # Useful for clients (UI state machines) and for debugging.
         await ws.send_json({"type": "turn_complete", "trigger": trigger})
@@ -213,7 +231,9 @@ async def handle_websocket(ws: WebSocket) -> None:
             return True
 
     try:
-        await ws.send_json({"type": "server_hello", "message": "connected"})
+        await ws.send_json(
+            {"type": "server_hello", "message": "connected", "conversation_id": conversation_id}
+        )
 
         while True:
             frame: dict[str, Any] = await ws.receive()
