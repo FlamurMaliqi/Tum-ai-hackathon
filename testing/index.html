@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Comstruct WS Demo</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; }
+      .row { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+      input { padding: 10px; min-width: 320px; }
+      button { padding: 10px 12px; cursor: pointer; }
+      pre { background: #0b1020; color: #dbe7ff; padding: 12px; border-radius: 8px; overflow: auto; }
+      .muted { color: #666; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <h2>WebSocket Demo (JSON + Binary)</h2>
+    <div class="muted">
+      This is a plain JS client. It connects to <code>/websocket</code>, sends JSON messages, logs JSON responses,
+      and logs byte length for binary frames (future audio streaming).
+    </div>
+
+    <div class="row">
+      <button id="connectBtn">Connect</button>
+      <button id="disconnectBtn" disabled>Disconnect</button>
+      <button id="interruptBtn" disabled>Interrupt</button>
+      <button id="sendBinaryBtn" disabled>Send Binary (placeholder)</button>
+    </div>
+
+    <div class="row">
+      <input id="textInput" placeholder="Type a message…" />
+      <button id="sendBtn" disabled>Send user_message</button>
+    </div>
+
+    <pre id="log"></pre>
+
+    <script>
+      // --- Minimal, production-ready client scaffold ---
+      // - No polling / HTTP fetch
+      // - JSON uses text frames
+      // - Binary uses raw ArrayBuffer (no base64)
+
+      const logEl = document.getElementById("log");
+      const connectBtn = document.getElementById("connectBtn");
+      const disconnectBtn = document.getElementById("disconnectBtn");
+      const sendBtn = document.getElementById("sendBtn");
+      const interruptBtn = document.getElementById("interruptBtn");
+      const sendBinaryBtn = document.getElementById("sendBinaryBtn");
+      const textInput = document.getElementById("textInput");
+
+      let ws = null;
+
+      function log(...args) {
+        const line = args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ");
+        logEl.textContent += line + "\n";
+        logEl.scrollTop = logEl.scrollHeight;
+        console.log(...args);
+      }
+
+      function wsUrl() {
+        // Use ws://localhost for dev; wss:// for https deployments.
+        const proto = window.location.protocol === "https:" ? "wss" : "ws";
+        const host = window.location.host || "localhost:8000";
+        // If you open this file directly (file://), host is empty; default to localhost:8000.
+        return `${proto}://${host}/websocket`;
+      }
+
+      function setConnected(connected) {
+        disconnectBtn.disabled = !connected;
+        sendBtn.disabled = !connected;
+        interruptBtn.disabled = !connected;
+        sendBinaryBtn.disabled = !connected;
+      }
+
+      connectBtn.addEventListener("click", () => {
+        if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+
+        const url = wsUrl();
+        log("connecting:", url);
+        ws = new WebSocket(url);
+        ws.binaryType = "arraybuffer";
+
+        ws.addEventListener("open", () => {
+          log("open");
+          setConnected(true);
+          // Optional: send a message on connect.
+          ws.send(JSON.stringify({ type: "user_message", text: "hello from browser" }));
+        });
+
+        ws.addEventListener("close", (ev) => {
+          log("close:", { code: ev.code, reason: ev.reason });
+          setConnected(false);
+        });
+
+        ws.addEventListener("error", () => {
+          log("error");
+        });
+
+        ws.addEventListener("message", (event) => {
+          if (typeof event.data === "string") {
+            try {
+              const msg = JSON.parse(event.data);
+              log("json:", msg);
+            } catch {
+              log("text:", event.data);
+            }
+            return;
+          }
+
+          // With binaryType="arraybuffer", event.data is an ArrayBuffer.
+          if (event.data instanceof ArrayBuffer) {
+            log("binary:", { bytes: event.data.byteLength });
+            return;
+          }
+
+          // Some environments might deliver a Blob; handle it without base64.
+          if (event.data instanceof Blob) {
+            log("binary(blob):", { bytes: event.data.size });
+            return;
+          }
+
+          log("unknown message type:", typeof event.data);
+        });
+      });
+
+      disconnectBtn.addEventListener("click", () => {
+        if (!ws) return;
+        log("disconnecting…");
+        ws.close(1000, "client closed");
+      });
+
+      sendBtn.addEventListener("click", () => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        const text = textInput.value.trim();
+        ws.send(JSON.stringify({ type: "user_message", text }));
+      });
+
+      interruptBtn.addEventListener("click", () => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        ws.send(JSON.stringify({ type: "interrupt" }));
+      });
+
+      sendBinaryBtn.addEventListener("click", () => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        // Raw bytes. No base64.
+        ws.send(new Uint8Array([0, 1, 2, 3, 4]).buffer);
+      });
+    </script>
+  </body>
+</html>
+
+

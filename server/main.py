@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from api.v1.routes import artikel_router, inventory_router
+from api.v1.routes import artikel_router, inventory_router, ws_router
 import uvicorn
 
 app = FastAPI(
@@ -11,6 +11,7 @@ app = FastAPI(
 # Include routers
 app.include_router(artikel_router, prefix="/api/v1")
 app.include_router(inventory_router, prefix="/api/v1")
+app.include_router(ws_router)  # WebSocket endpoint at "/websocket" (no version prefix)
 
 @app.get("/")
 async def root():
