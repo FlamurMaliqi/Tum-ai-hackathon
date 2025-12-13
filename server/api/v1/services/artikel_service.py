@@ -1,13 +1,29 @@
-from typing import List, Dict
+import logging
+from typing import List, Dict, Optional
 from psycopg2.extras import RealDictCursor
 from ..data_access.database import get_db_connection
 
-def get_all_artikel() -> List[Dict]:
-    """Retrieve all articles from the database."""
+logger = logging.getLogger(__name__)
+
+def get_all_artikel(
+    search: Optional[str] = None,
+    category: Optional[str] = None
+) -> List[Dict]:
+    """
+    Retrieve articles from the database with optional search and category filtering.
+    
+    Args:
+        search: Optional search term to filter by artikelname or lieferant
+        category: Optional category to filter by kategorie
+    
+    Returns:
+        List of article dictionaries
+    """
     conn = get_db_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("""
+            # Build query with optional filters
+            query = """
                 SELECT 
                     artikel_id,
                     artikelname,
@@ -20,9 +36,27 @@ def get_all_artikel() -> List[Dict]:
                     lagerort,
                     typische_baustelle
                 FROM artikel
-                ORDER BY artikel_id
-            """)
+                WHERE 1=1
+            """
+            params = []
+            
+            if search:
+                query += " AND (LOWER(artikelname) LIKE LOWER(%s) OR LOWER(lieferant) LIKE LOWER(%s))"
+                search_pattern = f"%{search}%"
+                params.extend([search_pattern, search_pattern])
+                logger.info(f"Adding search filter: {search_pattern}")
+            
+            if category:
+                query += " AND kategorie = %s"
+                params.append(category)
+                logger.info(f"Adding category filter: {category}")
+            
+            query += " ORDER BY artikel_id"
+            
+            logger.info(f"Executing query with {len(params)} parameters")
+            cur.execute(query, params)
             articles = cur.fetchall()
+            logger.info(f"Found {len(articles)} articles")
             # Convert RealDictRow to regular dict
             return [dict(row) for row in articles]
     finally:

@@ -140,11 +140,7 @@ export default function Search() {
 
         {filteredProducts.length === 0 && (
           <div className="text-center py-16">
-            <div className="text-4xl mb-4">🔍</div>
             <p className="text-muted-foreground">Keine Produkte gefunden</p>
-            <p className="text-sm text-muted-foreground mt-2">
-              Versuchen Sie einen anderen Suchbegriff
-            </p>
           </div>
         )}
       </main>
