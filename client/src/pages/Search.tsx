@@ -1,44 +1,41 @@
 import { useState, useMemo } from "react";
-import { Search as SearchIcon, ArrowLeft, Package, Grid3x3 } from "lucide-react";
+import { Search as SearchIcon, ArrowLeft, Package, Grid3x3, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { BottomNav } from "@/components/BottomNav";
 import { ProductCard } from "@/components/ProductCard";
-import { products } from "@/data/products";
+import { useArticles } from "@/hooks/useArticles";
 
 export default function Search() {
   const [query, setQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
+  // Get all articles for category counts (no filters)
+  const allArticles = useArticles();
+  
+  // Get articles with search and category filters
+  const categoryFilter = selectedCategory === "Alle" ? undefined : selectedCategory;
+  const { data: articles = [], isLoading, error } = useArticles(query || undefined, categoryFilter);
+
   // Extract unique categories with product counts
   const categoriesWithCounts = useMemo(() => {
+    if (!allArticles.data) return [];
+    
     const categoryMap = new Map<string, number>();
-    products.forEach(product => {
-      categoryMap.set(product.category, (categoryMap.get(product.category) || 0) + 1);
+    allArticles.data.forEach(product => {
+      const cat = product.category || "Unbekannt";
+      categoryMap.set(cat, (categoryMap.get(cat) || 0) + 1);
     });
     
     // Add "All" category
     const allCategories = [
-      { name: "Alle", count: products.length },
+      { name: "Alle", count: allArticles.data.length },
       ...Array.from(categoryMap.entries())
         .map(([name, count]) => ({ name, count }))
         .sort((a, b) => a.name.localeCompare(b.name))
     ];
     
     return allCategories;
-  }, []);
-
-  const filteredProducts = useMemo(() => {
-    if (!selectedCategory) return [];
-    
-    return products.filter((product) => {
-      const matchesSearch = query
-        ? product.name.toLowerCase().includes(query.toLowerCase()) ||
-          product.supplier.toLowerCase().includes(query.toLowerCase())
-        : true;
-      const matchesCategory = selectedCategory === "Alle" || product.category === selectedCategory;
-      return matchesSearch && matchesCategory;
-    });
-  }, [query, selectedCategory]);
+  }, [allArticles.data]);
 
   // Show category grid if no category is selected
   if (!selectedCategory) {
@@ -51,12 +48,18 @@ export default function Search() {
 
         {/* Category Grid (Simple Style) */}
         <main className="p-4">
-          <p className="text-sm text-muted-foreground mb-4">
-            {categoriesWithCounts.length} Kategorien
-          </p>
-          
-          <div className="grid grid-cols-2 gap-3">
-            {categoriesWithCounts.map(({ name, count }) => {
+          {allArticles.isLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground mb-4">
+                {categoriesWithCounts.length} Kategorien
+              </p>
+              
+              <div className="grid grid-cols-2 gap-3">
+                {categoriesWithCounts.map(({ name, count }) => {
               const isAllCategory = name === "Alle";
               
               return (
@@ -87,7 +90,9 @@ export default function Search() {
                 </button>
               );
             })}
-          </div>
+              </div>
+            </>
+          )}
         </main>
 
         <BottomNav />
@@ -113,7 +118,7 @@ export default function Search() {
           <div className="flex-1">
             <h1 className="text-xl font-bold">{selectedCategory}</h1>
             <p className="text-xs text-muted-foreground">
-              {filteredProducts.length} {filteredProducts.length === 1 ? 'Produkt' : 'Produkte'}
+              {isLoading ? "..." : `${articles.length} ${articles.length === 1 ? 'Produkt' : 'Produkte'}`}
             </p>
           </div>
         </div>
@@ -132,16 +137,35 @@ export default function Search() {
 
       {/* Products Grid */}
       <main className="p-4">
-        <div className="grid gap-3">
-          {filteredProducts.map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-        </div>
-
-        {filteredProducts.length === 0 && (
-          <div className="text-center py-16">
-            <p className="text-muted-foreground">Keine Produkte gefunden</p>
+        {isLoading && (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
+        )}
+
+        {error && (
+          <div className="text-center py-16">
+            <p className="text-destructive">Fehler beim Laden der Produkte</p>
+            <p className="text-sm text-muted-foreground mt-2">
+              {error instanceof Error ? error.message : "Unbekannter Fehler"}
+            </p>
+          </div>
+        )}
+
+        {!isLoading && !error && (
+          <>
+            <div className="grid gap-3">
+              {articles.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
+
+            {articles.length === 0 && (
+              <div className="text-center py-16">
+                <p className="text-muted-foreground">Keine Produkte gefunden</p>
+              </div>
+            )}
+          </>
         )}
       </main>
 
