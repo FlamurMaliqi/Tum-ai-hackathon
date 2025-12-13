@@ -9,9 +9,9 @@ VALUES
 ON CONFLICT (artikel_id) DO NOTHING;
 
 -- Insert mock inventory entries
-INSERT INTO inventory (artikel_id, artikelname, kategorie, lieferant)
+INSERT INTO inventory (artikel_id, artikelname, kategorie, lieferant, construction_site)
 VALUES
-    ('C001', 'Schraube TX20 4x40', 'Befestigung', 'Würth'),
-    ('C019', 'Arbeitshandschuhe Gr.9', 'PSA', 'Uvex'),
-    ('C056', 'Baustellenlampe LED', 'Elektro', 'Brennenstuhl')
+    ('C001', 'Schraube TX20 4x40', 'Befestigung', 'Würth', 'Construction Site 1'),
+    ('C019', 'Arbeitshandschuhe Gr.9', 'PSA', 'Uvex', 'Construction Site 2'),
+    ('C056', 'Baustellenlampe LED', 'Elektro', 'Brennenstuhl', 'Construction Site 1')
 ON CONFLICT (artikel_id) DO NOTHING;
