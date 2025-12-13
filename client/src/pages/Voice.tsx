@@ -247,8 +247,20 @@ export default function Voice() {
             </p>
           )}
         </div>
+      </div>
 
-        {/* Animated Orb */}
+      {/* Error Display */}
+      {error && (
+        <div className="px-4 pb-2">
+          <div className="bg-destructive/10 text-destructive rounded-xl p-3 text-sm">
+            {error}
+          </div>
+        </div>
+      )}
+
+      {/* Main Voice Interface */}
+      <main className="flex flex-col items-center px-6 pb-12">
+        {/* Animated Orb / Microphone Button */}
         <div className="relative mb-6">
           {/* Outer glow rings - only show when recording */}
           {isRecording && (
@@ -274,6 +286,28 @@ export default function Voice() {
               <Mic className="h-10 w-10 text-primary-foreground" />
             )}
           </button>
+        </div>
+
+        {/* Control Buttons */}
+        <div className="flex gap-3 mb-4">
+          <Button
+            onClick={startListening}
+            disabled={scribe.isConnected || isConnecting}
+            variant={scribe.isConnected ? "secondary" : "default"}
+            className="rounded-xl"
+          >
+            <Mic className="h-4 w-4 mr-2" />
+            Start
+          </Button>
+          <Button
+            onClick={stopListening}
+            disabled={!scribe.isConnected}
+            variant="outline"
+            className="rounded-xl"
+          >
+            <MicOff className="h-4 w-4 mr-2" />
+            Stop
+          </Button>
         </div>
 
         {/* Status Indicator */}

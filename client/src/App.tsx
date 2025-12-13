@@ -13,6 +13,7 @@ import Orders from "./pages/Orders";
 import OrderDetail from "./pages/OrderDetail";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
+import AdminDashboard from "./pages/AdminDashboard";
 
 const queryClient = new QueryClient();
 
@@ -33,6 +34,7 @@ const App = () => (
               <Route path="/orders/:orderId" element={<OrderDetail />} />
               <Route path="/admin" element={<Admin />} />
               <Route path="*" element={<NotFound />} />
+              <Route path="/admin/dashboard" element={<AdminDashboard />} />
             </Routes>
           </BrowserRouter>
         </OrdersProvider>
