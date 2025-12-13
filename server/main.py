@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.v1.routes import artikel_router, inventory_router, elevenlabs_client_token_router, ws_router
+from api.v1.routes import artikel_router, inventory_router, elevenlabs_client_token_router, ws_router, voice_processing_router
 import uvicorn
 
 load_dotenv()
@@ -15,13 +15,23 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Configure CORS to allow WebSocket connections
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 apiPrefix = "/api/v1"
 
 # Include routers
 app.include_router(artikel_router, prefix=apiPrefix)
 app.include_router(inventory_router, prefix=apiPrefix)
 app.include_router(elevenlabs_client_token_router, prefix=apiPrefix)  
-app.include_router(ws_router, prefix=apiPrefix)  
+app.include_router(ws_router, prefix=apiPrefix)
+app.include_router(voice_processing_router, prefix=apiPrefix)  
 
 @app.get("/")
 async def root():

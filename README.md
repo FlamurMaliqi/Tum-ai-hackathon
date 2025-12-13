@@ -1,14 +1,47 @@
 # Comstruct
 
+A construction materials ordering system with AI-powered voice assistant.
+
+## Features
+
+- **Real-time Speech-to-Text**: Integration with ElevenLabs Realtime Scribe
+- **Voice Order Processing**: Natural language processing for material orders
+- **WebSocket Support**: Real-time bidirectional communication
+- **REST API**: Product catalog and order management
+
 ### Real-time WebSocket (FastAPI ↔ Browser)
 
 This repo includes a minimal, production-ready WebSocket setup intended as the foundation for streaming AI / voice:
 
-- **Endpoint**: `GET /websocket` (WebSocket upgrade)
+- **Endpoint**: `GET /api/v1/websocket/` (WebSocket upgrade)
 - **Transport**: WebSocket only (no polling / no HTTP fetch)
 - **Frames**:
   - **Text frames (JSON)** for structured messages
   - **Binary frames (raw bytes)** for future audio streaming (no base64)
+
+### Voice Processing REST Endpoint
+
+For processing transcribed voice input:
+
+- **Endpoint**: `POST /api/v1/websocket/process-voice`
+- **Request Body**:
+```json
+{
+  "transcript": "5 säcke zement bitte"
+}
+```
+- **Response**:
+```json
+{
+  "orderItem": {
+    "productId": "...",
+    "name": "Zement",
+    "quantity": 5,
+    "unit": "Sack"
+  },
+  "message": "Processed transcript: ..."
+}
+```
 
 ## Server (FastAPI)
 
@@ -51,13 +84,13 @@ The server cancels any active stream task and confirms with JSON (`stream_cancel
 
 Open `testing/index.html` in a browser and click **Connect**.
 
-- If opened via `file://`, the client defaults to `ws://localhost:8000/websocket`.
-- If served over HTTPS, the client will automatically use `wss://…/websocket`.
+- If opened via `file://`, the client defaults to `ws://localhost:8000/api/v1/websocket/`.
+- If served over HTTPS, the client will automatically use `wss://…/api/v1/websocket/`.
 
 ### Integrate in your app (minimal snippet)
 
 ```js
-const ws = new WebSocket("ws://localhost:8000/websocket");
+const ws = new WebSocket("ws://localhost:8000/api/v1/websocket/");
 ws.binaryType = "arraybuffer";
 
 ws.onopen = () => {
@@ -77,5 +110,7 @@ ws.onmessage = (event) => {
 ## Where the code lives
 
 - **Server WebSocket endpoint**: `server/api/v1/routes/websocket.py`
+- **Server Voice Processing**: `server/api/v1/routes/voice_processing.py`
 - **Server app wiring**: `server/main.py`
 - **Demo client**: `testing/index.html`
+- **React Voice UI**: `client/src/pages/Voice.tsx`
