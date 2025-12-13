@@ -8,6 +8,7 @@ WORKDIR /app
 # Copy project files
 COPY pyproject.toml ./
 COPY main.py ./
+COPY api/ ./api/
 
 # Install dependencies
 RUN uv sync 

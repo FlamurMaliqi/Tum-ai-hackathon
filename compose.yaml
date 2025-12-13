@@ -12,3 +12,22 @@ services:
       dockerfile: Dockerfile
     ports:
       - 8000:8000
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=postgresql://artikel_user:artikel_pass@db:5432/artikel_db
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=artikel_user
+      - POSTGRES_PASSWORD=artikel_pass
+      - POSTGRES_DB=artikel_db
+    ports:
+      - 5432:5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+
+volumes:
+  postgres_data:
