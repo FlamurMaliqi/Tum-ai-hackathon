@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Comstruct WS 5s Text Demo</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; max-width: 980px; }
+      .row { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; align-items: center; }
+      input { padding: 10px; min-width: 520px; }
+      button { padding: 10px 12px; cursor: pointer; }
+      pre { background: #0b1020; color: #dbe7ff; padding: 12px; border-radius: 8px; overflow: auto; min-height: 280px; }
+      code { background: rgba(127,127,127,0.12); padding: 2px 6px; border-radius: 6px; }
+      .muted { color: #666; font-size: 12px; line-height: 1.35; }
+      .pill { display: inline-block; padding: 3px 8px; border-radius: 999px; background: rgba(127,127,127,0.12); font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <h2>WebSocket “5 seconds of human text” demo</h2>
+    <div class="muted">
+      This page connects to your FastAPI WebSocket endpoint
+      <code>/api/v1/websocket/</code> and sends ~5 seconds of text as a construction supervisor ordering
+      <b>10 masks</b> to your voice agent server.
+    </div>
+
+    <div class="row">
+      <span class="pill">WS URL</span>
+      <input id="wsUrlInput" />
+    </div>
+
+    <div class="row">
+      <button id="connectBtn">Connect</button>
+      <button id="disconnectBtn" disabled>Disconnect</button>
+      <button id="runDemoBtn" disabled>Run 5s supervisor order</button>
+      <button id="interruptBtn" disabled>Interrupt</button>
+      <button id="clearBtn">Clear log</button>
+    </div>
+
+    <pre id="log"></pre>
+
+    <script>
+      const logEl = document.getElementById("log");
+      const connectBtn = document.getElementById("connectBtn");
+      const disconnectBtn = document.getElementById("disconnectBtn");
+      const runDemoBtn = document.getElementById("runDemoBtn");
+      const interruptBtn = document.getElementById("interruptBtn");
+      const clearBtn = document.getElementById("clearBtn");
+      const wsUrlInput = document.getElementById("wsUrlInput");
+
+      const DEMO_LINES = [
+        "Hey, this is Mike, the site supervisor at the Riverside job.",
+        "I need to place an order for ten N95 masks for my crew.",
+        "Please confirm you have them in stock and can deliver to the main gate today.",
+        "Put it on the Riverside account and mark it as urgent safety supplies.",
+        "Read that back: ten masks, deliver today, Riverside site main gate."
+      ];
+
+      let ws = null;
+      let demoTimeouts = [];
+
+      function log(...args) {
+        const line = args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ");
+        logEl.textContent += line + "\n";
+        logEl.scrollTop = logEl.scrollHeight;
+        console.log(...args);
+      }
+
+      function defaultWsUrl() {
+        const proto = window.location.protocol === "https:" ? "wss" : "ws";
+        return `${proto}://localhost:8000/api/v1/websocket/`;
+      }
+
+      function setConnected(connected) {
+        disconnectBtn.disabled = !connected;
+        runDemoBtn.disabled = !connected;
+        interruptBtn.disabled = !connected;
+      }
+
+      function clearDemoTimers() {
+        for (const t of demoTimeouts) clearTimeout(t);
+        demoTimeouts = [];
+      }
+
+      function sendJson(obj) {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+        ws.send(JSON.stringify(obj));
+        return true;
+      }
+
+      function connect() {
+        if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+
+        const url = wsUrlInput.value.trim() || defaultWsUrl();
+        log("connecting:", url);
+
+        ws = new WebSocket(url);
+        ws.binaryType = "arraybuffer";
+
+        ws.addEventListener("open", () => {
+          log("open");
+          setConnected(true);
+        });
+
+        ws.addEventListener("close", (ev) => {
+          log("close:", { code: ev.code, reason: ev.reason });
+          setConnected(false);
+          clearDemoTimers();
+        });
+
+        ws.addEventListener("error", () => {
+          log("error");
+        });
+
+        ws.addEventListener("message", (event) => {
+          if (typeof event.data === "string") {
+            try {
+              const msg = JSON.parse(event.data);
+              log("json:", msg);
+            } catch {
+              log("text:", event.data);
+            }
+            return;
+          }
+
+          if (event.data instanceof ArrayBuffer) {
+            log("binary:", { bytes: event.data.byteLength });
+            return;
+          }
+
+          if (event.data instanceof Blob) {
+            log("binary(blob):", { bytes: event.data.size });
+            return;
+          }
+
+          log("unknown message type:", typeof event.data);
+        });
+      }
+
+      async function ensureConnected() {
+        if (ws && ws.readyState === WebSocket.OPEN) return;
+        connect();
+        await new Promise((resolve, reject) => {
+          const start = Date.now();
+          const tick = () => {
+            if (ws && ws.readyState === WebSocket.OPEN) return resolve();
+            if (ws && ws.readyState === WebSocket.CLOSED) return reject(new Error("WebSocket closed"));
+            if (Date.now() - start > 4000) return reject(new Error("Timed out waiting for WebSocket open"));
+            setTimeout(tick, 25);
+          };
+          tick();
+        });
+      }
+
+      function runDemo5Seconds() {
+        clearDemoTimers();
+
+        log("--- demo: supervisor ordering 10 masks (about 5 seconds) ---");
+
+        // Send one sentence per ~1s (5 sentences ≈ 5 seconds).
+        DEMO_LINES.forEach((line, i) => {
+          const delayMs = i * 1000;
+          const t = setTimeout(() => {
+            log("demo → user_message:", line);
+            sendJson({ type: "user_message", text: line });
+          }, delayMs);
+          demoTimeouts.push(t);
+        });
+      }
+
+      // Init
+      wsUrlInput.value = defaultWsUrl();
+      setConnected(false);
+
+      // UI handlers
+      connectBtn.addEventListener("click", () => connect());
+
+      disconnectBtn.addEventListener("click", () => {
+        clearDemoTimers();
+        if (!ws) return;
+        log("disconnecting…");
+        ws.close(1000, "client closed");
+      });
+
+      runDemoBtn.addEventListener("click", async () => {
+        try {
+          await ensureConnected();
+          runDemo5Seconds();
+        } catch (e) {
+          log("demo failed:", String(e && e.message ? e.message : e));
+        }
+      });
+
+      interruptBtn.addEventListener("click", () => {
+        log("interrupt → sending interrupt");
+        sendJson({ type: "interrupt" });
+      });
+
+      clearBtn.addEventListener("click", () => {
+        logEl.textContent = "";
+      });
+    </script>
+  </body>
+</html>
+
