@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Python virtual environments
+.venv/
+venv/
+ENV/
+env/
+*.egg-info/
+dist/
+build/
+
+# Environment variables
+.env
+.envrc
+.env.local
+.env.*.local
+
+# Python testing & coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+*.cover
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Linting
+.ruff_cache/
+
+# IDE - VS Code
+.vscode/
+
+# IDE - Cursor
+.cursorignore
+.cursorindexingignore
+
+# IDE - PyCharm
+.idea/
+
+# Docker
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
