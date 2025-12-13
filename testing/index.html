@@ -16,7 +16,7 @@
   <body>
     <h2>WebSocket Demo (JSON + Binary)</h2>
     <div class="muted">
-      This is a plain JS client. It connects to <code>/websocket</code>, sends JSON messages, logs JSON responses,
+      This is a plain JS client. It connects to <code>/api/v1/websocket/</code>, sends JSON messages, logs JSON responses,
       and logs byte length for binary frames (future audio streaming).
     </div>
 
@@ -62,7 +62,7 @@
         const proto = window.location.protocol === "https:" ? "wss" : "ws";
         const host = window.location.host || "localhost:8000";
         // If you open this file directly (file://), host is empty; default to localhost:8000.
-        return `${proto}://${host}/websocket`;
+        return `${proto}://${host}/api/v1/websocket/`;
       }
 
       function setConnected(connected) {
