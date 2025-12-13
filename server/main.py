@@ -1,6 +1,13 @@
+import os
+
+from dotenv import load_dotenv
 from fastapi import FastAPI
-from api.v1.routes import artikel_router, inventory_router, ws_router
+from fastapi.middleware.cors import CORSMiddleware
+
+from api.v1.routes import artikel_router, inventory_router, elevenlabs_client_token_router, ws_router
 import uvicorn
+
+load_dotenv()
 
 app = FastAPI(
     title="Artikel API",
@@ -8,10 +15,13 @@ app = FastAPI(
     version="1.0.0"
 )
 
+apiPrefix = "/api/v1"
+
 # Include routers
-app.include_router(artikel_router, prefix="/api/v1")
-app.include_router(inventory_router, prefix="/api/v1")
-app.include_router(ws_router)  # WebSocket endpoint at "/websocket" (no version prefix)
+app.include_router(artikel_router, prefix=apiPrefix)
+app.include_router(inventory_router, prefix=apiPrefix)
+app.include_router(elevenlabs_client_token_router, prefix=apiPrefix)  
+app.include_router(ws_router, prefix=apiPrefix)  
 
 @app.get("/")
 async def root():
