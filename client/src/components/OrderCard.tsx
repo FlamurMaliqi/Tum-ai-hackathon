@@ -1,6 +1,6 @@
 import { Order, OrderStatus } from "@/data/orders";
 import { cn } from "@/lib/utils";
-import { ChevronRight, Clock, CheckCircle, XCircle, Truck } from "lucide-react";
+import { ChevronRight, Clock, CheckCircle, XCircle, Truck, FileText } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const statusConfig: Record<OrderStatus, { label: string; icon: React.ElementType; className: string }> = {
@@ -13,9 +13,10 @@ const statusConfig: Record<OrderStatus, { label: string; icon: React.ElementType
 interface OrderCardProps {
   order: Order;
   showDetails?: boolean;
+  disableLink?: boolean;
 }
 
-export function OrderCard({ order, showDetails = false }: OrderCardProps) {
+export function OrderCard({ order, showDetails = false, disableLink = false }: OrderCardProps) {
   const status = statusConfig[order.status];
   const StatusIcon = status.icon;
 
@@ -56,12 +57,21 @@ export function OrderCard({ order, showDetails = false }: OrderCardProps) {
               </div>
             ))}
           </div>
+          {order.adminNotes && (
+            <div className="mt-4 pt-4 border-t border-border/50">
+              <div className="flex items-center gap-2 mb-2">
+                <FileText className="h-4 w-4 text-muted-foreground" />
+                <p className="text-sm font-medium">Admin-Notizen</p>
+              </div>
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{order.adminNotes}</p>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 
-  if (showDetails) return content;
+  if (showDetails || disableLink) return content;
 
   return (
     <Link to={`/orders/${order.id}`} className="block">
