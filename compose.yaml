@@ -21,14 +21,8 @@ services:
         condition: service_healthy
     environment:
       - DATABASE_URL=postgresql://artikel_user:artikel_pass@db:5432/artikel_db
-      - PORT=8000
-      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
+    env_file:
+      - server/.env
 
   db:
     image: postgres:15-alpine
