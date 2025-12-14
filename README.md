@@ -1,166 +1,100 @@
-# Comstruct
+# CMats
 
-A construction materials ordering system with AI-powered voice assistant.
+This platform is a specialized full-stack management application designed to streamline material ordering and inventory oversight for Site Foremen and Logistics Personnel. 
+
+The platform replaces manual processes with a conversational voice interface. Users can effortlessly place CMats orders in real-time by speaking, receiving immediate confirmation or follow-up questions via natural Text-to-Speech voice prompts.
 
 ## Features
 
-- **Real-time Speech-to-Text**: Integration with ElevenLabs Realtime Scribe
-- **Voice Order Processing**: Natural language processing for material orders
-- **WebSocket Support**: Real-time bidirectional communication
-- **REST API**: Product catalog and order management
+- **Voice Interface**: 
+  - Integrated voice recognition with AI-powered conversational responses
+- **Admin Dashboard**: 
+  - Manage inventory across multiple sites
+  - Track incoming/outgoing shipments
+  - Review orders with alternative product selection
+- **Multi-site Support**: 
+  - Handle stock levels per warehouse/location
 
-### Real-time WebSocket (FastAPI ↔ Browser)
-
-This repo includes a minimal, production-ready WebSocket setup intended as the foundation for streaming AI / voice:
-
-- **Endpoint**: `GET /api/v1/websocket/` (WebSocket upgrade)
-- **Transport**: WebSocket only (no polling / no HTTP fetch)
-- **Frames**:
-  - **Text frames (JSON)** for structured messages
-  - **Binary frames (raw bytes)** for future audio streaming (no base64)
-
-### Voice Processing REST Endpoint
-
-For processing transcribed voice input:
-
-- **Endpoint**: `POST /api/v1/websocket/process-voice`
-- **Request Body**:
-```json
-{
-  "transcript": "5 säcke zement bitte"
-}
-```
-- **Response**:
-```json
-{
-  "orderItem": {
-    "productId": "...",
-    "name": "Zement",
-    "quantity": 5,
-    "unit": "Sack"
-  },
-  "message": "Processed transcript: ..."
-}
-```
-
-## Quick Start with Docker
-
-The easiest way to run everything is using Docker Compose:
+## Local Development Setup
 
 ### Prerequisites
+- Docker & Docker Compose installed
+- API Keys (you must obtain your own):
+  - ElevenLabs API Key
+  - Anthropic API Key
 
-1. **Docker** and **Docker Compose** installed
-2. **ElevenLabs API Key** (optional, for voice features):
-   - Get your API key from: https://elevenlabs.io/app/settings/api-keys
-   - Create a `.env` file in the project root (optional):
-     ```env
-     ELEVENLABS_API_KEY=your_api_key_here
-     ```
+### Installation
 
-### Run with Docker Compose
+**1. Clone the repository:**
+```bash
+# Clone the repository
+git clone <repository-url>
+cd Tum-ai-hackathon
+```
+
+**2. Set up environment variables:**
+
+Create environment files with your API keys. You can use the provided example files as templates:
+
+**Server (.env.example):**
+
+```bash
+# replace with actual keys in server/.env.example
+ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+```
+
+**Client (.env.local):**
+```bash
+# client/.env.local
+VITE_API_URL=http://localhost:8000
+```
+
+**3. Start services with Docker:**
 
 ```bash
 # Build and start all services
 docker compose up --build
 
-# Or run in detached mode
-docker compose up -d --build
+# Or if already built:
+docker compose up
 ```
 
-This will start:
-- **Client** (React app) on http://localhost:3000
-- **Server** (FastAPI) on http://localhost:8000
-- **Database** (PostgreSQL) on localhost:5432
+Open http://localhost:5173 in your browser.
 
-### Stop services
-
+**3. Stop services:**
+Stop:
 ```bash
 docker compose down
-
-# To also remove volumes (clears database)
-docker compose down -v
 ```
 
-### View logs
+## 📁 Project Structure
 
-```bash
-# All services
-docker compose logs -f
-
-# Specific service
-docker compose logs -f server
-docker compose logs -f client
-docker compose logs -f db
 ```
-
-## Server (FastAPI)
-
-### Run the server
-
-From the repo root, run your FastAPI app (however you already run it). If you're using the included entrypoint:
-
-```bash
-python3 server/main.py
+Tum-ai-hackathon/
+├── server/                 
+│   ├── api/
+│   │   └── v1/            
+│   ├── scripts/
+│   ├── tests/
+│   ├── main.py           
+│   ├── cors.py            
+│   ├── Dockerfile
+│   ├── pyproject.toml
+│   ├── .env.example
+│   ├── .env
+│   └── README.md
+├── database/
+│   └── init/   
+│       ├── 01_schema.sql
+│       ├── 02_data.sql
+│       └── ...
+├── testing/      
+│   ├── ws_construction_supervisor_5s_demo.html
+│   └── index.html
+├── compose.yaml      
+├── QUICKSTART.md
+├── ELEVENLABS_INTEGRATION.md
+├── BAUPROJEKTE_GUIDE.md
+└── README.md
 ```
-
-The server will listen on `0.0.0.0:8000`.
-
-### WebSocket protocol
-
-The server accepts JSON messages with a `type` field and responds with JSON and (optionally) binary frames.
-
-- **Send user message**:
-
-```json
-{ "type": "user_message", "text": "hello" }
-```
-
-The server will:
-- Ack with a JSON message (`type: "server_message"`)
-- Stream a response using multiple JSON messages (`assistant_start` → repeated `assistant_token` → `assistant_done`)
-- Send a **binary frame** as a placeholder for future audio output
-
-- **Interrupt streaming**:
-
-```json
-{ "type": "interrupt" }
-```
-
-The server cancels any active stream task and confirms with JSON (`stream_cancelled`, `server_message`).
-
-## Client (Browser / plain JS)
-
-### Demo client
-
-Open `testing/index.html` in a browser and click **Connect**.
-
-- If opened via `file://`, the client defaults to `ws://localhost:8000/api/v1/websocket/`.
-- If served over HTTPS, the client will automatically use `wss://…/api/v1/websocket/`.
-
-### Integrate in your app (minimal snippet)
-
-```js
-const ws = new WebSocket("ws://localhost:8000/api/v1/websocket/");
-ws.binaryType = "arraybuffer";
-
-ws.onopen = () => {
-  ws.send(JSON.stringify({ type: "user_message", text: "hello" }));
-};
-
-ws.onmessage = (event) => {
-  if (typeof event.data === "string") {
-    console.log("json", JSON.parse(event.data));
-  } else {
-    // ArrayBuffer / Blob depending on environment
-    console.log("binary bytes", event.data.byteLength ?? event.data.size);
-  }
-};
-```
-
-## Where the code lives
-
-- **Server WebSocket endpoint**: `server/api/v1/routes/websocket.py`
-- **Server Voice Processing**: `server/api/v1/routes/voice_processing.py`
-- **Server app wiring**: `server/main.py`
-- **Demo client**: `testing/index.html`
-- **React Voice UI**: `client/src/pages/Voice.tsx`
