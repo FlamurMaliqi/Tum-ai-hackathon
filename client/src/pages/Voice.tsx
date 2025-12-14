@@ -48,14 +48,9 @@ export default function Voice() {
     },
     onError: (error) => {
       console.error("❌ Scribe error:", error);
-      setCurrentText("Fehler: " + (error.message || "Unbekannter Fehler"));
+      const message = error instanceof Error ? error.message : "Unbekannter Fehler";
+      setCurrentText("Fehler: " + message);
       setIsRecording(false);
-    },
-    onOpen: () => {
-      console.log("🔌 WebSocket connection opened");
-    },
-    onClose: () => {
-      console.log("🔌 WebSocket connection closed");
     },
   });
 
@@ -277,7 +272,7 @@ export default function Voice() {
             )}
           </div>
 
-          <TestButton />
+          <TestButton className="mb-10" />
 
           {/* Voice Button */}
           <div className="relative">

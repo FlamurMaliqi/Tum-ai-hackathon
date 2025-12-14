@@ -1,9 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useScribe } from "@elevenlabs/react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
-type VoiceToTextComponentProps = {
+type TestButtonProps = {
   wsUrl?: string;
   tokenEndpoint?: string; // returns { token: string }
+  className?: string;
 };
 
 function defaultWsUrl(): string {
@@ -12,13 +15,16 @@ function defaultWsUrl(): string {
   return `${scheme}://${window.location.host}/api/v1/websocket/`;
 }
 
-export default function VoiceToTextComponent({
+export function TestButton({
   wsUrl,
   tokenEndpoint = "/api/v1/elevenlabs-token/",
-}: VoiceToTextComponentProps) {
+  className,
+}: TestButtonProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState("");
-  const [connectionStatus, setConnectionStatus] = useState("Disconnected");
+  const [connectionStatus, setConnectionStatus] = useState<"Disconnected" | "Connecting..." | "Connected" | "Recording..." | `Error: ${string}`>(
+    "Disconnected",
+  );
 
   const websocketRef = useRef<WebSocket | null>(null);
 
@@ -49,11 +55,25 @@ export default function VoiceToTextComponent({
     },
   });
 
+  const scribeRef = useRef(scribe);
+
+  useEffect(() => {
+    scribeRef.current = scribe;
+  }, [scribe]);
+
   useEffect(() => {
     const url = wsUrl ?? defaultWsUrl();
     setConnectionStatus("Connecting...");
 
-    const ws = new WebSocket(url);
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(url);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Invalid WebSocket URL";
+      setConnectionStatus(`Error: ${msg}`);
+      websocketRef.current = null;
+      return;
+    }
     websocketRef.current = ws;
 
     ws.onopen = () => setConnectionStatus("Connected");
@@ -62,18 +82,24 @@ export default function VoiceToTextComponent({
 
     return () => {
       try {
-        scribe.disconnect();
-      } catch {
-        // ignore
-      }
-      try {
         ws.close();
       } catch {
         // ignore
       }
       websocketRef.current = null;
     };
-  }, [wsUrl, scribe]);
+  }, [wsUrl]);
+
+  // Ensure scribe is disconnected on unmount (avoid effect churn in dev)
+  useEffect(() => {
+    return () => {
+      try {
+        scribeRef.current.disconnect();
+      } catch {
+        // ignore
+      }
+    };
+  }, []);
 
   const startRecording = async () => {
     try {
@@ -126,19 +152,47 @@ export default function VoiceToTextComponent({
     setConnectionStatus(websocketRef.current?.readyState === WebSocket.OPEN ? "Connected" : "Disconnected");
   };
 
-  return (
-    <div>
-      <div>Status: {connectionStatus}</div>
-      <div>Transcript: {transcript || "..."}</div>
+  const handleToggle = () => {
+    if (isRecording) stopRecording();
+    else void startRecording();
+  };
 
-      <button type="button" onClick={startRecording} disabled={isRecording}>
-        Start
-      </button>
-      <button type="button" onClick={stopRecording} disabled={!isRecording}>
-        Stop
-      </button>
+  return (
+    <div className={cn("w-full max-w-md flex flex-col items-center gap-2", className)}>
+      <Button
+        type="button"
+        variant="destructive"
+        onClick={handleToggle}
+        className="w-full h-12 text-base font-semibold"
+      >
+        {isRecording ? "Stop (Test)" : "Start (Test)"}
+      </Button>
+
+      <div className="text-xs text-muted-foreground">
+        Status:{" "}
+        <span
+          className={cn(
+            "font-medium",
+            connectionStatus.startsWith("Error:")
+              ? "text-destructive"
+              : connectionStatus === "Connected"
+                ? "text-success"
+                : connectionStatus === "Recording..."
+                  ? "text-primary"
+                  : "text-muted-foreground",
+          )}
+        >
+          {connectionStatus}
+        </span>
+      </div>
+
+      {transcript ? (
+        <div className="w-full text-xs text-muted-foreground truncate" title={transcript}>
+          Transcript: <span className="text-foreground">{transcript}</span>
+        </div>
+      ) : null}
     </div>
   );
 }
 
-export const TestButton = VoiceToTextComponent;
+export default TestButton;
