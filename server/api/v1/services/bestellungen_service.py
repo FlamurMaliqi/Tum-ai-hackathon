@@ -1,11 +1,16 @@
 from typing import List, Dict, Optional
 from psycopg2.extras import RealDictCursor
 from ..data_access.database import get_db_connection
+from ..services.artikel_service import get_alternative_products
 from datetime import datetime
 import uuid
+import logging
+
+logger = logging.getLogger(__name__)
 
 def get_all_bestellungen_with_items() -> List[Dict]:
     """Retrieve all orders with their associated order items."""
+    print("[DEBUG] get_all_bestellungen_with_items called", flush=True)
     conn = get_db_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -31,7 +36,7 @@ def get_all_bestellungen_with_items() -> List[Dict]:
             # Convert to list of dicts
             orders_list = [dict(row) for row in orders]
             
-            # For each order, get its items
+            # For each order, get its items and recalculate total
             for order in orders_list:
                 cur.execute("""
                     SELECT 
@@ -50,7 +55,43 @@ def get_all_bestellungen_with_items() -> List[Dict]:
                 """, (order['bestell_id'],))
                 
                 items = cur.fetchall()
-                order['bestellpositionen'] = [dict(item) for item in items]
+                items_list = []
+                for item_row in items:
+                    # Convert RealDictRow to regular dict to ensure mutability
+                    item_dict = dict(item_row)
+                    items_list.append(item_dict)
+                
+                # Add alternatives for each item (counterparts from different suppliers)
+                for item in items_list:
+                    artikel_name = item.get('artikel_name', '')
+                    artikel_id = item.get('artikel_id', '')
+                    item['alternatives'] = []  # Initialize empty list
+                    try:
+                        alternatives = get_alternative_products(artikel_name, artikel_id)
+                        if alternatives:
+                            item['alternatives'] = [
+                                {
+                                    'artikel_id': alt['artikel_id'],
+                                    'artikel_name': alt['artikelname'],
+                                    'lieferant': alt['lieferant'],
+                                    'preis_eur': float(alt['preis_eur']) if alt['preis_eur'] else 0.0,
+                                    'einheit': alt['einheit']
+                                }
+                                for alt in alternatives
+                            ]
+                    except Exception as e:
+                        logger.error(f"Error fetching alternatives for {artikel_name}: {e}", exc_info=True)
+                        # Keep empty list on error
+                
+                order['bestellpositionen'] = items_list
+                
+                # Recalculate total from items to ensure accuracy
+                calculated_total = sum(
+                    float(item['gesamt_preis']) if isinstance(item['gesamt_preis'], (int, float, str)) 
+                    else 0.0 
+                    for item in items_list
+                )
+                order['gesamt_betrag'] = calculated_total
             
             return orders_list
     finally:
@@ -192,7 +233,45 @@ def update_bestellung_status(
                 WHERE bestell_id = %s 
                 ORDER BY position_nummer
             """, (bestell_id,))
-            order['bestellpositionen'] = [dict(item) for item in cur.fetchall()]
+            items = cur.fetchall()
+            items_list = []
+            for item_row in items:
+                # Convert RealDictRow to regular dict to ensure mutability
+                item_dict = dict(item_row)
+                items_list.append(item_dict)
+            
+            # Add alternatives for each item (counterparts from different suppliers)
+            for item in items_list:
+                try:
+                    artikel_name = item.get('artikel_name', '')
+                    artikel_id = item.get('artikel_id', '')
+                    logger.info(f"Processing item: {artikel_name} (ID: {artikel_id})")
+                    alternatives = get_alternative_products(artikel_name, artikel_id)
+                    logger.info(f"Found {len(alternatives)} alternatives for {artikel_name} (excluding {artikel_id})")
+                    item['alternatives'] = [
+                        {
+                            'artikel_id': alt['artikel_id'],
+                            'artikel_name': alt['artikelname'],
+                            'lieferant': alt['lieferant'],
+                            'preis_eur': float(alt['preis_eur']) if alt['preis_eur'] else 0.0,
+                            'einheit': alt['einheit']
+                        }
+                        for alt in alternatives
+                    ]
+                    logger.info(f"Added {len(item['alternatives'])} alternatives to item {artikel_name}")
+                except Exception as e:
+                    logger.error(f"Error fetching alternatives for {item.get('artikel_name', 'unknown')}: {e}", exc_info=True)
+                    item['alternatives'] = []
+            
+            order['bestellpositionen'] = items_list
+            
+            # Recalculate total from items to ensure accuracy
+            calculated_total = sum(
+                float(item['gesamt_preis']) if isinstance(item['gesamt_preis'], (int, float, str)) 
+                else 0.0 
+                for item in items_list
+            )
+            order['gesamt_betrag'] = calculated_total
             
             return order
     finally:

@@ -1,11 +1,18 @@
 export type OrderStatus = "pending" | "approved" | "rejected" | "delivered";
 
+export interface OrderItemAlternative {
+  name: string;
+  price: number;
+  artikel_id: string;
+}
+
 export interface OrderItem {
   productId: string;
   productName: string;
   quantity: number;
   unit: string;
   price: number;
+  alternatives?: OrderItemAlternative[];
 }
 
 export interface Order {

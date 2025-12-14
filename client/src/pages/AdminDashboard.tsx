@@ -1,7 +1,9 @@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useMemo, useState, useEffect } from "react";
-import { Package, ArrowDownCircle, ArrowUpCircle, MapPin, ArrowLeft, X, Plus, Trash2 } from "lucide-react";
+import { Package, ArrowDownCircle, ArrowUpCircle, MapPin, ArrowLeft, X, Plus, Trash2, Loader2, ChevronDown, Check } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useOrdersBackend, useUpdateOrderStatus } from "@/hooks/useOrdersBackend";
+import { Order as BackendOrder, OrderStatus } from "@/data/orders";
 
 type Order = {
   id: string;
@@ -9,6 +11,8 @@ type Order = {
   status: "pending" | "accepted" | "declined";
   placedAt: string;
   items: { name: string; qty: number; price: number; alternatives?: { name: string; price: number }[] }[];
+  foremanName?: string;
+  projectName?: string;
 };
 
 type InventoryItem = { sku: string; name: string; qty: number; site: string };
@@ -514,10 +518,53 @@ function ShipmentList({
 }
 
 function AdminOrders() {
-  const [orders, setOrders] = useState<Order[]>(mockOrders);
+  const { data: backendOrders = [], isLoading, error } = useOrdersBackend();
+  const updateOrderStatusMutation = useUpdateOrderStatus();
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const [selectedAlternatives, setSelectedAlternatives] = useState<Record<string, string>>({});
+
+  // Calculate dynamic total based on selected alternatives
+  const calculateOrderTotal = useMemo(() => {
+    if (!selectedOrder) return 0;
+    
+    return selectedOrder.items.reduce((sum, item) => {
+      const key = `${selectedOrder.id}-${item.name}`;
+      const chosenAlt = selectedAlternatives[key];
+      const unitPrice = chosenAlt
+        ? item.alternatives?.find((a) => a.name === chosenAlt)?.price ?? item.price
+        : item.price;
+      return sum + (unitPrice * item.qty);
+    }, 0);
+  }, [selectedOrder, selectedAlternatives]);
+
+  // Map backend orders to AdminDashboard Order format
+  const orders: Order[] = useMemo(() => {
+    return backendOrders.map((backendOrder: BackendOrder) => {
+      // Map backend status to admin dashboard status
+      let status: "pending" | "accepted" | "declined" = "pending";
+      if (backendOrder.status === "approved" || backendOrder.status === "delivered") {
+        status = "accepted";
+      } else if (backendOrder.status === "rejected") {
+        status = "declined";
+      }
+
+      return {
+        id: backendOrder.id,
+        total: backendOrder.total,
+        status: status,
+        placedAt: backendOrder.createdAt.toLocaleDateString(),
+        items: backendOrder.items.map((item) => ({
+          name: item.productName,
+          qty: item.quantity,
+          price: item.price,
+          alternatives: item.alternatives,
+        })),
+        foremanName: backendOrder.foremanName,
+        projectName: backendOrder.projectName,
+      };
+    });
+  }, [backendOrders]);
 
   const sortedOrders = [...orders].sort((a, b) => {
     const statusOrder = { pending: 0, accepted: 1, declined: 2 };
@@ -525,27 +572,15 @@ function AdminOrders() {
   });
 
   const handleStatusChange = (orderId: string, newStatus: "accepted" | "declined") => {
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.id === orderId
-          ? {
-              ...o,
-              status: newStatus,
-              items:
-                newStatus === "accepted"
-                  ? o.items.map((item) => {
-                      const key = `${o.id}-${item.name}`;
-                      const altName = selectedAlternatives[key];
-                      if (!altName) return item;
-                      const alt = item.alternatives?.find((a) => a.name === altName);
-                      if (!alt) return item;
-                      return { ...item, name: alt.name, price: alt.price };
-                    })
-                  : o.items,
-            }
-          : o
-      )
-    );
+    // Map admin dashboard status to backend status
+    const backendStatus: OrderStatus = newStatus === "accepted" ? "approved" : "rejected";
+    
+    updateOrderStatusMutation.mutate({
+      orderId,
+      status: backendStatus,
+      genehmigt_von: "admin", // You can make this dynamic later
+    });
+
     setSelectedOrder(null);
     setExpandedItems({});
     setSelectedAlternatives({});
@@ -559,10 +594,17 @@ function AdminOrders() {
   const selectAlternative = (orderId: string, itemName: string, altName: string) => {
     const key = `${orderId}-${itemName}`;
     setSelectedAlternatives((prev) => {
+      // If clicking the same alternative or original, clear the selection
       if (prev[key] === altName) {
         const { [key]: _, ...rest } = prev;
         return rest;
       }
+      // If clicking original (itemName), clear the selection
+      if (altName === itemName) {
+        const { [key]: _, ...rest } = prev;
+        return rest;
+      }
+      // Otherwise, set the new alternative
       return { ...prev, [key]: altName };
     });
   };
@@ -577,13 +619,43 @@ function AdminOrders() {
     }
   }, [selectedOrder]);
 
+  if (isLoading) {
+    return (
+      <div className="border rounded-2xl p-4 bg-card/60 backdrop-blur space-y-3 shadow-sm">
+        <h2 className="font-semibold">Orders</h2>
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="border rounded-2xl p-4 bg-card/60 backdrop-blur space-y-3 shadow-sm">
+        <h2 className="font-semibold">Orders</h2>
+        <div className="text-center py-8">
+          <p className="text-destructive">Error loading orders</p>
+          <p className="text-sm text-muted-foreground mt-2">
+            {error instanceof Error ? error.message : "Unknown error"}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="border rounded-2xl p-4 bg-card/60 backdrop-blur space-y-3 shadow-sm">
       <h2 className="font-semibold">Orders</h2>
-      <p className="text-sm text-muted-foreground">Review, choose alternatives, and accept/decline.</p>
+      <p className="text-sm text-muted-foreground">Review and accept/decline orders.</p>
 
-      <div className="space-y-2">
-        {sortedOrders.map((o) => (
+      {sortedOrders.length === 0 ? (
+        <div className="text-center py-8">
+          <p className="text-muted-foreground">No orders found</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {sortedOrders.map((o) => (
           <div
             key={o.id}
             onClick={() => setSelectedOrder(o)}
@@ -594,7 +666,11 @@ function AdminOrders() {
                 <span className="text-sm font-semibold">{o.id}</span>
                 <StatusPill status={o.status} />
               </div>
-              <p className="text-sm text-muted-foreground">Items: {o.items.length} · Placed {o.placedAt}</p>
+              <p className="text-sm text-muted-foreground">
+                {o.foremanName && `${o.foremanName} · `}
+                {o.projectName && `${o.projectName} · `}
+                Items: {o.items.length} · Placed {o.placedAt}
+              </p>
             </div>
             <div className="text-right">
               <div className="text-sm font-semibold">€{o.total.toLocaleString()}</div>
@@ -602,7 +678,8 @@ function AdminOrders() {
             </div>
           </div>
         ))}
-      </div>
+        </div>
+      )}
 
       {selectedOrder && (
         <>
@@ -612,7 +689,11 @@ function AdminOrders() {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-semibold">{selectedOrder.id}</h2>
-                  <p className="text-xs text-muted-foreground">Placed {selectedOrder.placedAt}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedOrder.foremanName && `${selectedOrder.foremanName} · `}
+                    {selectedOrder.projectName && `${selectedOrder.projectName} · `}
+                    Placed {selectedOrder.placedAt}
+                  </p>
                 </div>
                 <button className="p-2 hover:bg-muted rounded-lg" onClick={() => setSelectedOrder(null)}>
                   <X className="w-5 h-5" />
@@ -632,57 +713,114 @@ function AdminOrders() {
                         : item.price;
                     const unitTotal = unitPrice * item.qty;
 
+                    const supplierMatch = chosenAlt ? chosenAlt.match(/\(([^)]+)\)$/) : null;
+                    const currentSupplier = supplierMatch ? supplierMatch[1] : null;
+                    const isUsingAlternative = chosenAlt && chosenAlt !== item.name;
+
                     return (
-                      <div key={key} className="rounded-xl border bg-card/60 p-4">
+                      <div key={key} className="rounded-xl border bg-card/60 p-4 space-y-3">
                         <div className="flex items-start justify-between gap-4">
-                          <div className="space-y-1">
-                            <div className="text-sm font-semibold">{chosenAlt || item.name}</div>
+                          <div className="space-y-1 flex-1">
+                            <div className="flex items-center gap-2">
+                              <div className="text-sm font-semibold">{item.name}</div>
+                              {isUsingAlternative && (
+                                <span className="px-2 py-0.5 rounded-md bg-primary/10 text-primary text-xs font-medium">
+                                  {currentSupplier}
+                                </span>
+                              )}
+                            </div>
                             <div className="text-xs text-muted-foreground">Qty: {item.qty}</div>
                           </div>
                           <div className="text-right">
-                            <div className="text-sm font-semibold">€{unitTotal.toLocaleString()}</div>
-                            <div className="text-xs text-muted-foreground">€{unitPrice.toLocaleString()} / unit</div>
+                            <div className="text-sm font-semibold">€{unitTotal.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                            <div className="text-xs text-muted-foreground">€{unitPrice.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / unit</div>
                           </div>
                         </div>
 
                         {item.alternatives && item.alternatives.length > 0 && (
-                          <div className="mt-3">
-                            <div className="flex items-center gap-3">
-                              <button
-                                className="text-xs text-primary hover:underline"
-                                onClick={() => toggleExpand(selectedOrder.id, item.name)}
-                              >
-                                {isExpanded ? "Hide alternatives" : "Show alternatives"}
-                              </button>
-                              {chosenAlt && (
+                          <div className="relative">
+                            <details className="group">
+                              <summary className="flex items-center justify-between cursor-pointer list-none">
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                                  <Package className="w-3.5 h-3.5" />
+                                  <span className="font-medium">
+                                    {isUsingAlternative ? 'Change supplier' : 'View alternatives'}
+                                  </span>
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/60">
+                                    {item.alternatives.length + 1}
+                                  </span>
+                                </div>
+                                <ChevronDown className="w-4 h-4 text-muted-foreground group-open:rotate-180 transition-transform" />
+                              </summary>
+                              <div className="mt-3 pt-3 border-t border-border/40 space-y-2">
+                                {/* Original option */}
                                 <button
-                                  className="text-xs text-muted-foreground hover:underline"
-                                  onClick={() => selectAlternative(selectedOrder.id, item.name, chosenAlt)}
+                                  onClick={() => {
+                                    const key = `${selectedOrder.id}-${item.name}`;
+                                    setSelectedAlternatives((prev) => {
+                                      const { [key]: _, ...rest } = prev;
+                                      return rest;
+                                    });
+                                  }}
+                                  className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all ${
+                                    !chosenAlt
+                                      ? "border-primary bg-primary/5 shadow-sm"
+                                      : "border-border/50 bg-card/40 hover:border-primary/50 hover:bg-card/60"
+                                  }`}
                                 >
-                                  Clear selection
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                      !chosenAlt ? "border-primary bg-primary" : "border-border"
+                                    }`}>
+                                      {!chosenAlt && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
+                                    </div>
+                                    <div className="text-left">
+                                      <div className="text-sm font-medium">{item.name}</div>
+                                      <div className="text-xs text-muted-foreground">Current supplier</div>
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="text-sm font-semibold">€{item.price.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                    <div className="text-xs text-muted-foreground">per unit</div>
+                                  </div>
                                 </button>
-                              )}
-                            </div>
 
-                            {isExpanded && (
-                              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {/* Alternative options */}
                                 {item.alternatives.map((alt) => {
                                   const selected = chosenAlt === alt.name;
+                                  const altSupplierMatch = alt.name.match(/\(([^)]+)\)$/);
+                                  const altSupplier = altSupplierMatch ? altSupplierMatch[1] : 'Alternative';
+                                  
                                   return (
                                     <button
                                       key={alt.name}
-                                      className={`text-left rounded-lg border p-3 transition ${
-                                        selected ? "border-primary bg-primary/10" : "hover:bg-muted"
-                                      }`}
                                       onClick={() => selectAlternative(selectedOrder.id, item.name, alt.name)}
+                                      className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all ${
+                                        selected
+                                          ? "border-primary bg-primary/5 shadow-sm"
+                                          : "border-border/50 bg-card/40 hover:border-primary/50 hover:bg-card/60"
+                                      }`}
                                     >
-                                      <div className="text-sm font-medium">{alt.name}</div>
-                                      <div className="text-xs text-muted-foreground">€{alt.price.toLocaleString()} / unit</div>
+                                      <div className="flex items-center gap-3">
+                                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                          selected ? "border-primary bg-primary" : "border-border"
+                                        }`}>
+                                          {selected && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
+                                        </div>
+                                        <div className="text-left">
+                                          <div className="text-sm font-medium">{item.name}</div>
+                                          <div className="text-xs text-muted-foreground">{altSupplier}</div>
+                                        </div>
+                                      </div>
+                                      <div className="text-right">
+                                        <div className="text-sm font-semibold">€{alt.price.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                        <div className="text-xs text-muted-foreground">per unit</div>
+                                      </div>
                                     </button>
                                   );
                                 })}
                               </div>
-                            )}
+                            </details>
                           </div>
                         )}
                       </div>
@@ -693,22 +831,24 @@ function AdminOrders() {
 
               <div className="flex items-center justify-between border-t pt-4">
                 <span className="text-sm font-semibold">Order Total</span>
-                <span className="text-sm font-semibold">€{selectedOrder.total.toLocaleString()}</span>
+                <span className="text-lg font-bold">€{calculateOrderTotal.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
 
               {selectedOrder.status === "pending" ? (
                 <div className="flex gap-3 pt-2">
                   <button
-                    className="flex-1 px-3 py-3 text-sm rounded-lg border border-green-500 text-green-600 hover:bg-green-50 font-medium"
+                    className="flex-1 px-3 py-3 text-sm rounded-lg border border-green-500 text-green-600 hover:bg-green-50 font-medium disabled:opacity-50"
                     onClick={() => handleStatusChange(selectedOrder.id, "accepted")}
+                    disabled={updateOrderStatusMutation.isPending}
                   >
-                    Accept
+                    {updateOrderStatusMutation.isPending ? "Processing..." : "Accept"}
                   </button>
                   <button
-                    className="flex-1 px-3 py-3 text-sm rounded-lg border border-red-500 text-red-600 hover:bg-red-50 font-medium"
+                    className="flex-1 px-3 py-3 text-sm rounded-lg border border-red-500 text-red-600 hover:bg-red-50 font-medium disabled:opacity-50"
                     onClick={() => handleStatusChange(selectedOrder.id, "declined")}
+                    disabled={updateOrderStatusMutation.isPending}
                   >
-                    Decline
+                    {updateOrderStatusMutation.isPending ? "Processing..." : "Decline"}
                   </button>
                 </div>
               ) : (

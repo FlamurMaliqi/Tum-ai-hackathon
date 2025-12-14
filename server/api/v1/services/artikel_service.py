@@ -63,3 +63,50 @@ def get_all_artikel(
             return [dict(row) for row in articles]
     finally:
         conn.close()
+
+
+def get_alternative_products(artikelname: str, exclude_artikel_id: Optional[str] = None) -> List[Dict]:
+    """
+    Find alternative products with the same name but different supplier.
+    
+    Args:
+        artikelname: Product name to find alternatives for
+        exclude_artikel_id: Optional artikel_id to exclude from results
+    
+    Returns:
+        List of alternative article dictionaries
+    """
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            query = """
+                SELECT 
+                    a.artikel_id,
+                    a.artikelname,
+                    a.kategorie,
+                    a.einheit,
+                    a.preis_eur,
+                    a.lieferant,
+                    a.verbrauchsart,
+                    a.gefahrgut,
+                    a.lagerort,
+                    a.construction_site_id,
+                    cs.name as construction_site_name
+                FROM artikel a
+                LEFT JOIN construction_sites cs ON a.construction_site_id = cs.id
+                WHERE a.artikelname = %s
+            """
+            params = [artikelname]
+            
+            if exclude_artikel_id:
+                query += " AND a.artikel_id != %s"
+                params.append(exclude_artikel_id)
+            
+            query += " ORDER BY a.lieferant, a.artikel_id"
+            
+            cur.execute(query, params)
+            alternatives = cur.fetchall()
+            logger.info(f"Found {len(alternatives)} alternatives for {artikelname}")
+            return [dict(row) for row in alternatives]
+    finally:
+        conn.close()

@@ -18,6 +18,14 @@ interface BackendOrder {
   bestellpositionen: BackendOrderItem[];
 }
 
+interface BackendAlternative {
+  artikel_id: string;
+  artikel_name: string;
+  lieferant: string;
+  preis_eur: number;
+  einheit: string;
+}
+
 interface BackendOrderItem {
   position_id: number;
   artikel_id: string;
@@ -28,6 +36,7 @@ interface BackendOrderItem {
   gesamt_preis: number | string;
   position_nummer: number;
   notizen?: string | null;
+  alternatives?: BackendAlternative[];
 }
 
 // Map backend order to frontend Order
@@ -41,12 +50,20 @@ function mapBackendOrderToOrder(backendOrder: BackendOrder): Order {
       ? parseFloat(item.einzelpreis) 
       : item.einzelpreis;
     
+    // Map alternatives if they exist
+    const alternatives = item.alternatives?.map((alt) => ({
+      name: `${alt.artikel_name} (${alt.lieferant})`,
+      price: alt.preis_eur,
+      artikel_id: alt.artikel_id,
+    })) || [];
+    
     return {
       productId: item.artikel_id,
       productName: item.artikel_name,
       quantity: item.menge,
       unit: item.einheit,
       price: einzelpreis,
+      alternatives: alternatives.length > 0 ? alternatives : undefined,
     };
   });
   
