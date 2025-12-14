@@ -43,6 +43,13 @@
       <button id="sendBtn" disabled>Send</button>
     </div>
 
+    <div class="row">
+      <span class="pill">Audio</span>
+      <audio id="ttsAudio" controls style="min-width: 520px"></audio>
+      <button id="stopAudioBtn" disabled>Stop audio</button>
+      <button id="clearAudioBtn" disabled>Clear audio</button>
+    </div>
+
     <pre id="log"></pre>
 
     <script>
@@ -55,6 +62,9 @@
       const wsUrlInput = document.getElementById("wsUrlInput");
       const chatInput = document.getElementById("chatInput");
       const sendBtn = document.getElementById("sendBtn");
+      const ttsAudio = document.getElementById("ttsAudio");
+      const stopAudioBtn = document.getElementById("stopAudioBtn");
+      const clearAudioBtn = document.getElementById("clearAudioBtn");
 
       const DEMO_LINES = [
         "Hey, this is Mike, the construction site supervisor at the Riverside job.",
@@ -66,6 +76,199 @@
 
       let ws = null;
       let demoTimeouts = [];
+
+      // ---- TTS playback (Chrome-friendly streaming) ----
+      let mediaSource = null;
+      let sourceBuffer = null;
+      let mediaSourceUrl = null;
+      let audioQueue = [];
+      let usingMse = false;
+      let msePending = false;
+      let mseFailed = false;
+      let fallbackChunks = [];
+      let fallbackUrl = null;
+
+      function canUseMseMp3() {
+        return (
+          typeof window.MediaSource !== "undefined" &&
+          typeof window.MediaSource.isTypeSupported === "function" &&
+          window.MediaSource.isTypeSupported("audio/mpeg")
+        );
+      }
+
+      function pauseAndDetachAudio() {
+        try {
+          ttsAudio.pause();
+        } catch {}
+
+        // Detach any current source.
+        ttsAudio.removeAttribute("src");
+        try {
+          ttsAudio.load();
+        } catch {}
+      }
+
+      function revokeUrls() {
+        if (mediaSourceUrl) {
+          try {
+            URL.revokeObjectURL(mediaSourceUrl);
+          } catch {}
+          mediaSourceUrl = null;
+        }
+        if (fallbackUrl) {
+          try {
+            URL.revokeObjectURL(fallbackUrl);
+          } catch {}
+          fallbackUrl = null;
+        }
+      }
+
+      function resetTtsPlayback(reason = "reset") {
+        audioQueue = [];
+        fallbackChunks = [];
+        usingMse = false;
+        msePending = false;
+        mseFailed = false;
+
+        // Try to gracefully end MSE if open.
+        try {
+          if (mediaSource && mediaSource.readyState === "open") {
+            mediaSource.endOfStream();
+          }
+        } catch {}
+
+        sourceBuffer = null;
+        mediaSource = null;
+
+        pauseAndDetachAudio();
+        revokeUrls();
+        log("tts:", reason);
+      }
+
+      function pumpMseQueue() {
+        if (!usingMse || !sourceBuffer) return;
+        if (sourceBuffer.updating) return;
+        if (!audioQueue.length) return;
+
+        const next = audioQueue.shift();
+        try {
+          sourceBuffer.appendBuffer(next);
+        } catch (e) {
+          log("tts: mse append failed; switching to fallback:", String(e));
+          usingMse = false;
+          mseFailed = true;
+        }
+      }
+
+      function startTtsSession() {
+        resetTtsPlayback("tts session start");
+
+        if (!canUseMseMp3()) {
+          mseFailed = true;
+          log("tts: MediaSource audio/mpeg not supported; using fallback");
+          return;
+        }
+
+        try {
+          mediaSource = new MediaSource();
+          mediaSourceUrl = URL.createObjectURL(mediaSource);
+          ttsAudio.src = mediaSourceUrl;
+          msePending = true;
+
+          mediaSource.addEventListener("sourceopen", () => {
+            try {
+              sourceBuffer = mediaSource.addSourceBuffer("audio/mpeg");
+              // In-order append is ideal for streamed MP3 chunks.
+              try {
+                sourceBuffer.mode = "sequence";
+              } catch {}
+              sourceBuffer.addEventListener("updateend", () => pumpMseQueue());
+              usingMse = true;
+              msePending = false;
+              log("tts: mse sourceopen; ready");
+              pumpMseQueue();
+            } catch (e) {
+              log("tts: addSourceBuffer failed; using fallback:", String(e));
+              usingMse = false;
+              msePending = false;
+              mseFailed = true;
+            }
+          });
+        } catch (e) {
+          log("tts: mse init failed; using fallback:", String(e));
+          usingMse = false;
+          msePending = false;
+          mseFailed = true;
+        }
+      }
+
+      function onTtsBinaryChunk(arrayBuffer) {
+        // Always accumulate fallback bytes so we can still play something
+        // if streaming fails midway.
+        fallbackChunks.push(arrayBuffer);
+
+        // If MSE is available but not ready yet (sourceopen pending), queue now.
+        if ((usingMse || msePending) && mediaSource && !mseFailed) {
+          audioQueue.push(arrayBuffer);
+
+          if (usingMse && sourceBuffer && mediaSource.readyState === "open") {
+            pumpMseQueue();
+            // Autoplay (best effort) once we have data.
+            if (ttsAudio.paused) ttsAudio.play().catch(() => {});
+          }
+          return;
+        }
+      }
+
+      function finalizeTtsSession() {
+        if (mediaSource && !mseFailed && (usingMse || msePending)) {
+          // Drain any pending appends first.
+          const start = Date.now();
+          const tryFinalize = () => {
+            if (!mediaSource || mseFailed) return;
+            if (msePending && !sourceBuffer) {
+              if (Date.now() - start > 2000) {
+                log("tts: mse never opened; falling back to post-response playback");
+                usingMse = false;
+                msePending = false;
+                mseFailed = true;
+                finalizeTtsSession();
+                return;
+              }
+              setTimeout(tryFinalize, 50);
+              return;
+            }
+            if (sourceBuffer && (sourceBuffer.updating || audioQueue.length)) {
+              pumpMseQueue();
+              setTimeout(tryFinalize, 50);
+              return;
+            }
+            try {
+              if (mediaSource.readyState === "open") mediaSource.endOfStream();
+            } catch {}
+            log("tts: mse ended");
+          };
+          tryFinalize();
+          return;
+        }
+
+        // Fallback: play after done.
+        if (!fallbackChunks.length) {
+          log("tts: no audio received");
+          return;
+        }
+
+        try {
+          const blob = new Blob(fallbackChunks, { type: "audio/mpeg" });
+          revokeUrls();
+          fallbackUrl = URL.createObjectURL(blob);
+          ttsAudio.src = fallbackUrl;
+          ttsAudio.play().catch(() => {});
+          log("tts: fallback playing (post-response)");
+        } catch (e) {
+          log("tts: fallback failed:", String(e));
+        }
+      }
 
       function log(...args) {
         const line = args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ");
@@ -85,6 +288,8 @@
         interruptBtn.disabled = !connected;
         chatInput.disabled = !connected;
         sendBtn.disabled = !connected;
+        stopAudioBtn.disabled = !connected;
+        clearAudioBtn.disabled = !connected;
       }
 
       function clearDemoTimers() {
@@ -116,6 +321,7 @@
           log("close:", { code: ev.code, reason: ev.reason });
           setConnected(false);
           clearDemoTimers();
+          resetTtsPlayback("ws closed");
         });
 
         ws.addEventListener("error", () => {
@@ -127,6 +333,14 @@
             try {
               const msg = JSON.parse(event.data);
               log("json:", msg);
+
+              // Lifecycle hooks to sync audio with assistant streaming.
+              if (msg && typeof msg.type === "string") {
+                if (msg.type === "assistant_start") startTtsSession();
+                if (msg.type === "assistant_done") finalizeTtsSession();
+                if (msg.type === "stream_cancelled") resetTtsPlayback("stream cancelled");
+                if (msg.type === "assistant_error") resetTtsPlayback("assistant error");
+              }
             } catch {
               log("text:", event.data);
             }
@@ -135,11 +349,16 @@
 
           if (event.data instanceof ArrayBuffer) {
             log("binary:", { bytes: event.data.byteLength });
+            onTtsBinaryChunk(event.data);
             return;
           }
 
           if (event.data instanceof Blob) {
             log("binary(blob):", { bytes: event.data.size });
+            event.data
+              .arrayBuffer()
+              .then((buf) => onTtsBinaryChunk(buf))
+              .catch((e) => log("tts: blob->arrayBuffer failed:", String(e)));
             return;
           }
 
@@ -216,11 +435,23 @@
 
       interruptBtn.addEventListener("click", () => {
         log("interrupt → sending interrupt");
+        resetTtsPlayback("interrupt (local)");
         sendJson({ type: "interrupt" });
       });
 
       clearBtn.addEventListener("click", () => {
         logEl.textContent = "";
+      });
+
+      stopAudioBtn.addEventListener("click", () => {
+        try {
+          ttsAudio.pause();
+        } catch {}
+        log("tts: paused");
+      });
+
+      clearAudioBtn.addEventListener("click", () => {
+        resetTtsPlayback("audio cleared");
       });
 
       sendBtn.addEventListener("click", () => sendChatMessage());

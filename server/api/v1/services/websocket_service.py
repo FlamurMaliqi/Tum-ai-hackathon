@@ -126,6 +126,9 @@ async def handle_websocket(ws: WebSocket) -> None:
                     if text:
                         assistant_text_parts.append(text)
                         await ws.send_json({"type": "assistant_token", "text": text})
+                        # IMPORTANT: `stream_tts()` expects an async iterator.
+                        # Yield each chunk so ElevenLabs can synthesize streaming audio.
+                        yield text
 
             async for audio_chunk in stream_tts(claude_text_stream()):
                 await ws.send_bytes(audio_chunk)
