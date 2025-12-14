@@ -693,7 +693,6 @@ function AdminOrders() {
 
       {selectedOrder && (
         <>
-          <div className="fixed inset-0 bg-black/80 z-50" />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
             <div className="bg-background border rounded-2xl w-full max-w-2xl p-6 space-y-5 shadow-xl">
               <div className="flex items-center justify-between">
