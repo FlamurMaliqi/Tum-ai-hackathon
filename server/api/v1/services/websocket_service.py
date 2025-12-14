@@ -38,7 +38,8 @@ from .claude_service import ClaudeServiceError, stream_claude_reply
 from .message_history_service import append_message
 from .tts_service import stream_tts
 
-logger = logging.getLogger(__name__)
+# Use Uvicorn's logger so logs reliably show up in dev/docker output.
+logger = logging.getLogger("uvicorn.error")
 
 # "Turn" heuristic: consider a turn complete after the client has been idle for
 # this many seconds. This matches the current demo which sends ~1 message/sec.
@@ -260,6 +261,39 @@ async def handle_websocket(ws: WebSocket) -> None:
                     continue
 
                 msg_type = msg.get("type")
+                if msg_type == "transcript":
+                    # Treat a committed transcript segment as a full "turn":
+                    # flush immediately and stream the assistant response.
+                    user_text = msg.get("text")
+                    if not isinstance(user_text, str):
+                        await ws.send_json(
+                            {"type": "error", "message": "transcript.text must be a string"}
+                        )
+                        continue
+
+                    # Server-side proof that we received the text.
+                    try:
+                        client = f"{ws.client.host}:{ws.client.port}" if ws.client else "unknown"
+                    except Exception:
+                        client = "unknown"
+                    logger.info("ws transcript from %s: %s", client, user_text)
+
+                    # This transcript is a complete turn; don't mix with any buffered text.
+                    await _cancel_turn_timer()
+                    async with turn_lock:
+                        turn_buffer.clear()
+
+                    # Enforce the same safety limits as buffered turns.
+                    ok = await _append_to_turn(user_text)
+                    if not ok:
+                        await ws.send_json({"type": "error", "message": "turn_too_large"})
+                        await _cancel_turn_timer()
+                        await _flush_turn(trigger="limits")
+                        continue
+
+                    await _flush_turn(trigger="transcript")
+                    continue
+
                 if msg_type == "user_message":
                     user_text = msg.get("text")
                     if not isinstance(user_text, str):

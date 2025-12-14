@@ -3,9 +3,9 @@ from pathlib import Path
 
 from dotenv import load_dotenv, find_dotenv
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
 from api.v1.routes import artikel_router, inventory_router, elevenlabs_client_token_router, ws_router, voice_processing_router, bestellungen_router, bauprojekte_router, construction_sites_router
+from cors import configure_cors
 import uvicorn
 
 # Try multiple methods to find and load the .env file
@@ -30,30 +30,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Configure CORS to allow WebSocket connections
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 apiPrefix = "/api/v1"
 
-# CORS configuration to allow frontend connections
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://localhost:5174",
-        "http://localhost:8083",  # Add your frontend port
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS configuration (single source of truth in server/cors.py)
+configure_cors(app)
 
 # Include routers
 app.include_router(artikel_router, prefix=apiPrefix)

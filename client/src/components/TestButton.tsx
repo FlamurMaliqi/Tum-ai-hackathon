@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useScribe } from "@elevenlabs/react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { apiUrl } from "@/lib/api";
 
 type TestButtonProps = {
   wsUrl?: string;
@@ -10,14 +11,24 @@ type TestButtonProps = {
 };
 
 function defaultWsUrl(): string {
-  if (typeof window === "undefined") return "ws://localhost/api/v1/websocket/";
+  // Prefer explicit API base when running the static Docker build (no Vite proxy).
+  // Falls back to same-origin (works in Vite dev where /api is proxied, including ws).
+  if (typeof window === "undefined") return "ws://localhost:8000/api/v1/websocket/";
+
+  const explicitApiBase = import.meta.env.VITE_API_URL;
+  if (typeof explicitApiBase === "string" && explicitApiBase.length > 0) {
+    const u = new URL(explicitApiBase);
+    const wsProtocol = u.protocol === "https:" ? "wss:" : "ws:";
+    return `${wsProtocol}//${u.host}/api/v1/websocket/`;
+  }
+
   const scheme = window.location.protocol === "https:" ? "wss" : "ws";
   return `${scheme}://${window.location.host}/api/v1/websocket/`;
 }
 
 export function TestButton({
   wsUrl,
-  tokenEndpoint = "/api/v1/elevenlabs-token/",
+  tokenEndpoint,
   className,
 }: TestButtonProps) {
   const [isRecording, setIsRecording] = useState(false);
@@ -27,6 +38,9 @@ export function TestButton({
   );
 
   const websocketRef = useRef<WebSocket | null>(null);
+  const audioChunksRef = useRef<BlobPart[]>([]);
+  const audioUrlRef = useRef<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const scribe = useScribe({
     modelId: "scribe_v2_realtime",
@@ -75,10 +89,76 @@ export function TestButton({
       return;
     }
     websocketRef.current = ws;
+    // Prefer ArrayBuffer for binary audio frames (mp3 bytes).
+    ws.binaryType = "arraybuffer";
 
     ws.onopen = () => setConnectionStatus("Connected");
     ws.onclose = () => setConnectionStatus("Disconnected");
     ws.onerror = () => setConnectionStatus("Error: WebSocket connection error");
+    ws.onmessage = (event) => {
+      const data = event.data as unknown;
+
+      // Text frames (JSON protocol)
+      if (typeof data === "string") {
+        try {
+          const msg = JSON.parse(data) as { type?: unknown; [k: string]: unknown };
+          const type = msg?.type;
+          if (typeof type === "string") {
+            // Useful debugging visibility during end-to-end testing.
+            // eslint-disable-next-line no-console
+            console.log("[ws]", msg);
+
+            if (type === "assistant_start") {
+              audioChunksRef.current = [];
+              if (audioRef.current) {
+                try {
+                  audioRef.current.pause();
+                } catch {
+                  // ignore
+                }
+              }
+              if (audioUrlRef.current) {
+                try {
+                  URL.revokeObjectURL(audioUrlRef.current);
+                } catch {
+                  // ignore
+                }
+                audioUrlRef.current = null;
+              }
+            }
+
+            if (type === "assistant_done") {
+              const chunks = audioChunksRef.current;
+              if (chunks.length > 0) {
+                const blob = new Blob(chunks, { type: "audio/mpeg" });
+                const url = URL.createObjectURL(blob);
+                audioUrlRef.current = url;
+                const audio = new Audio(url);
+                audioRef.current = audio;
+                void audio.play().catch((err) => {
+                  // eslint-disable-next-line no-console
+                  console.error("Audio playback failed:", err);
+                });
+              }
+            }
+          }
+        } catch {
+          // eslint-disable-next-line no-console
+          console.warn("[ws] non-JSON text frame:", data);
+        }
+        return;
+      }
+
+      // Binary frames (mp3 bytes)
+      if (data instanceof ArrayBuffer) {
+        audioChunksRef.current.push(new Uint8Array(data));
+        return;
+      }
+
+      if (data instanceof Blob) {
+        audioChunksRef.current.push(data);
+      }
+    };
 
     return () => {
       try {
@@ -87,6 +167,23 @@ export function TestButton({
         // ignore
       }
       websocketRef.current = null;
+
+      if (audioRef.current) {
+        try {
+          audioRef.current.pause();
+        } catch {
+          // ignore
+        }
+        audioRef.current = null;
+      }
+      if (audioUrlRef.current) {
+        try {
+          URL.revokeObjectURL(audioUrlRef.current);
+        } catch {
+          // ignore
+        }
+        audioUrlRef.current = null;
+      }
     };
   }, [wsUrl]);
 
@@ -107,7 +204,9 @@ export function TestButton({
         throw new Error("WebSocket not connected");
       }
 
-      const res = await fetch(tokenEndpoint, {
+      const resolvedTokenEndpoint = tokenEndpoint ?? apiUrl("/api/v1/elevenlabs-token/");
+
+      const res = await fetch(resolvedTokenEndpoint, {
         method: "GET",
         credentials: "include",
         headers: { Accept: "application/json" },
