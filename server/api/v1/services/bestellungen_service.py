@@ -58,8 +58,30 @@ def get_all_bestellungen_with_items() -> List[Dict]:
                 items_list = []
                 for item_row in items:
                     # Convert RealDictRow to regular dict to ensure mutability
-                    item_dict = dict(item_row)
+                    item_dict = {}
+                    for key, value in item_row.items():
+                        # Convert Decimal/numeric types to float for JSON serialization
+                        if hasattr(value, '__float__') and not isinstance(value, (int, float, str)):
+                            item_dict[key] = float(str(value))
+                        else:
+                            item_dict[key] = value
                     items_list.append(item_dict)
+                
+                # Calculate total BEFORE adding alternatives (to ensure gesamt_preis is already converted)
+                calculated_total = 0.0
+                for item in items_list:
+                    gesamt_preis = item.get('gesamt_preis', 0)
+                    logger.info(f"Item {item.get('artikel_id')}: gesamt_preis = {gesamt_preis}, type = {type(gesamt_preis)}")
+                    if isinstance(gesamt_preis, (int, float)):
+                        calculated_total += float(gesamt_preis)
+                        logger.info(f"Added {float(gesamt_preis)}, running total = {calculated_total}")
+                    elif gesamt_preis is not None:
+                        try:
+                            price_val = float(str(gesamt_preis))
+                            calculated_total += price_val
+                            logger.info(f"Converted and added {price_val}, running total = {calculated_total}")
+                        except (ValueError, TypeError) as e:
+                            logger.warning(f"Could not convert gesamt_preis: {e}")
                 
                 # Add alternatives for each item (counterparts from different suppliers)
                 for item in items_list:
@@ -85,13 +107,9 @@ def get_all_bestellungen_with_items() -> List[Dict]:
                 
                 order['bestellpositionen'] = items_list
                 
-                # Recalculate total from items to ensure accuracy
-                calculated_total = sum(
-                    float(item['gesamt_preis']) if isinstance(item['gesamt_preis'], (int, float, str)) 
-                    else 0.0 
-                    for item in items_list
-                )
+                # Use the calculated total (already computed above)
                 order['gesamt_betrag'] = calculated_total
+                logger.info(f"Order {order['bestell_id']}: Calculated total = {calculated_total}, Items count = {len(items_list)}")
             
             return orders_list
     finally:

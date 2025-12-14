@@ -549,9 +549,19 @@ function AdminOrders() {
         status = "declined";
       }
 
+      // Calculate total from items (always calculate to ensure accuracy)
+      const calculatedTotal = backendOrder.items.reduce((sum: number, item: any) => {
+        const itemTotal = (item.price || 0) * (item.quantity || 0);
+        return sum + itemTotal;
+      }, 0);
+      
+      // Use calculated total if backend total is 0 or invalid, otherwise use backend total
+      const backendTotal = backendOrder.total || 0;
+      const finalTotal = backendTotal > 0 ? backendTotal : calculatedTotal;
+
       return {
         id: backendOrder.id,
-        total: backendOrder.total,
+        total: finalTotal,
         status: status,
         placedAt: backendOrder.createdAt.toLocaleDateString(),
         items: backendOrder.items.map((item) => ({
