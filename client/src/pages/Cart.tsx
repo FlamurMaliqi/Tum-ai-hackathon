@@ -4,28 +4,37 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { BottomNav } from "@/components/BottomNav";
 import { useCart } from "@/hooks/useCart";
 import { useToast } from "@/hooks/use-toast";
 import { useCreateOrder } from "@/hooks/useOrdersBackend";
+import { useConstructionSites } from "@/hooks/useConstructionSites";
 
 export default function Cart() {
   const navigate = useNavigate();
   const { items, updateQuantity, removeItem, clearCart, totalPrice } = useCart();
   const { toast } = useToast();
   const createOrderMutation = useCreateOrder();
+  const { data: constructionSites = [], isLoading: isLoadingSites } = useConstructionSites();
   
   const [foremanName, setForemanName] = useState("Hans Müller");
-  const [projectName, setProjectName] = useState("Bauprojekt Mitte");
+  const [constructionSiteName, setConstructionSiteName] = useState<string>("");
   const [orderNotes, setOrderNotes] = useState("");
 
   const handleSubmitOrder = async () => {
     if (items.length === 0) return;
     
-    if (!foremanName.trim() || !projectName.trim()) {
+    if (!foremanName.trim() || !constructionSiteName.trim()) {
       toast({
         title: "Informationen erforderlich",
-        description: "Bitte geben Sie Polier-Name und Projekt-Name ein.",
+        description: "Bitte geben Sie Polier-Name und Baustelle ein.",
         variant: "destructive",
       });
       return;
@@ -35,7 +44,7 @@ export default function Cart() {
       // Prepare order data in backend format
       const orderData = {
         polier_name: foremanName.trim(),
-        projekt_name: projectName.trim(),
+        projekt_name: constructionSiteName.trim(),
         items: items.map(item => ({
           artikel_id: item.product.id,
           artikel_name: item.product.name,
@@ -119,15 +128,25 @@ export default function Cart() {
               />
             </div>
 
-            {/* Project Name */}
+            {/* Construction Site */}
             <div>
-              <label className="text-sm text-muted-foreground">Projekt-Name *</label>
-              <Input
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
-                placeholder="z.B. Bauprojekt Mitte"
-                className="mt-1 rounded-xl bg-secondary border-0"
-              />
+              <label className="text-sm text-muted-foreground">Baustelle *</label>
+              <Select
+                value={constructionSiteName}
+                onValueChange={setConstructionSiteName}
+                disabled={isLoadingSites}
+              >
+                <SelectTrigger className="mt-1 rounded-xl bg-secondary border-0 h-12">
+                  <SelectValue placeholder={isLoadingSites ? "Lade Baustellen..." : "Baustelle auswählen"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {constructionSites.map((site) => (
+                    <SelectItem key={site.id} value={site.name}>
+                      {site.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Notes */}
@@ -198,7 +217,7 @@ export default function Cart() {
         </div>
         <Button
           onClick={handleSubmitOrder}
-          disabled={createOrderMutation.isPending || !foremanName.trim() || !projectName.trim()}
+          disabled={createOrderMutation.isPending || !foremanName.trim() || !constructionSiteName.trim()}
           className="w-full h-12 rounded-xl text-base"
         >
           {createOrderMutation.isPending ? "Wird gesendet..." : "Bestellung aufgeben"}

@@ -14,7 +14,8 @@ interface BackendArticle {
   verbrauchsart: string;
   gefahrgut: boolean;
   lagerort: string;
-  typische_baustelle: string;
+  construction_site_id: number | null;
+  construction_site_name: string | null;
 }
 
 // Map backend article to frontend Product
@@ -40,7 +41,7 @@ function mapBackendArticleToProduct(article: BackendArticle): Product {
     consumptionType: article.verbrauchsart,
     hazardous: article.gefahrgut,
     storageLocation: article.lagerort,
-    typicalSite: article.typische_baustelle,
+    typicalSite: article.construction_site_name || "",
   };
 }
 

@@ -25,17 +25,19 @@ def get_all_artikel(
             # Build query with optional filters
             query = """
                 SELECT 
-                    artikel_id,
-                    artikelname,
-                    kategorie,
-                    einheit,
-                    preis_eur,
-                    lieferant,
-                    verbrauchsart,
-                    gefahrgut,
-                    lagerort,
-                    typische_baustelle
-                FROM artikel
+                    a.artikel_id,
+                    a.artikelname,
+                    a.kategorie,
+                    a.einheit,
+                    a.preis_eur,
+                    a.lieferant,
+                    a.verbrauchsart,
+                    a.gefahrgut,
+                    a.lagerort,
+                    a.construction_site_id,
+                    cs.name as construction_site_name
+                FROM artikel a
+                LEFT JOIN construction_sites cs ON a.construction_site_id = cs.id
                 WHERE 1=1
             """
             params = []

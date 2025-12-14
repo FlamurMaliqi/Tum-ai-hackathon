@@ -1,3 +1,11 @@
+-- Create the construction_sites table (must be created before artikel for foreign key)
+CREATE TABLE IF NOT EXISTS construction_sites (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create the artikel table
 CREATE TABLE IF NOT EXISTS artikel (
     artikel_id VARCHAR(50) PRIMARY KEY,
@@ -9,13 +17,14 @@ CREATE TABLE IF NOT EXISTS artikel (
     verbrauchsart VARCHAR(50),
     gefahrgut BOOLEAN DEFAULT FALSE,
     lagerort VARCHAR(100),
-    typische_baustelle VARCHAR(100)
+    construction_site_id INTEGER REFERENCES construction_sites(id)
 );
 
 -- Create indexes for common queries
 CREATE INDEX IF NOT EXISTS idx_kategorie ON artikel(kategorie);
 CREATE INDEX IF NOT EXISTS idx_lagerort ON artikel(lagerort);
-CREATE INDEX IF NOT EXISTS idx_typische_baustelle ON artikel(typische_baustelle);
+CREATE INDEX IF NOT EXISTS idx_artikel_construction_site ON artikel(construction_site_id);
+CREATE INDEX IF NOT EXISTS idx_construction_sites_name ON construction_sites(name);
 
 -- Create the inventory table
 CREATE TABLE IF NOT EXISTS inventory (
@@ -84,3 +93,4 @@ CREATE TABLE IF NOT EXISTS bestellpositionen (
 -- Indexes for bestellpositionen
 CREATE INDEX IF NOT EXISTS idx_bestellpositionen_bestell ON bestellpositionen(bestell_id);
 CREATE INDEX IF NOT EXISTS idx_bestellpositionen_artikel ON bestellpositionen(artikel_id);
+
