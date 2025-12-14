@@ -1,20 +1,103 @@
 # Comstruct
 
+A construction materials ordering system with AI-powered voice assistant.
+
+## Features
+
+- **Real-time Speech-to-Text**: Integration with ElevenLabs Realtime Scribe
+- **Voice Order Processing**: Natural language processing for material orders
+- **WebSocket Support**: Real-time bidirectional communication
+- **REST API**: Product catalog and order management
+
 ### Real-time WebSocket (FastAPI ↔ Browser)
 
 This repo includes a minimal, production-ready WebSocket setup intended as the foundation for streaming AI / voice:
 
-- **Endpoint**: `GET /websocket` (WebSocket upgrade)
+- **Endpoint**: `GET /api/v1/websocket/` (WebSocket upgrade)
 - **Transport**: WebSocket only (no polling / no HTTP fetch)
 - **Frames**:
   - **Text frames (JSON)** for structured messages
   - **Binary frames (raw bytes)** for future audio streaming (no base64)
 
+### Voice Processing REST Endpoint
+
+For processing transcribed voice input:
+
+- **Endpoint**: `POST /api/v1/websocket/process-voice`
+- **Request Body**:
+```json
+{
+  "transcript": "5 säcke zement bitte"
+}
+```
+- **Response**:
+```json
+{
+  "orderItem": {
+    "productId": "...",
+    "name": "Zement",
+    "quantity": 5,
+    "unit": "Sack"
+  },
+  "message": "Processed transcript: ..."
+}
+```
+
+## Quick Start with Docker
+
+The easiest way to run everything is using Docker Compose:
+
+### Prerequisites
+
+1. **Docker** and **Docker Compose** installed
+2. **ElevenLabs API Key** (optional, for voice features):
+   - Get your API key from: https://elevenlabs.io/app/settings/api-keys
+   - Create a `.env` file in the project root (optional):
+     ```env
+     ELEVENLABS_API_KEY=your_api_key_here
+     ```
+
+### Run with Docker Compose
+
+```bash
+# Build and start all services
+docker compose up --build
+
+# Or run in detached mode
+docker compose up -d --build
+```
+
+This will start:
+- **Client** (React app) on http://localhost:3000
+- **Server** (FastAPI) on http://localhost:8000
+- **Database** (PostgreSQL) on localhost:5432
+
+### Stop services
+
+```bash
+docker compose down
+
+# To also remove volumes (clears database)
+docker compose down -v
+```
+
+### View logs
+
+```bash
+# All services
+docker compose logs -f
+
+# Specific service
+docker compose logs -f server
+docker compose logs -f client
+docker compose logs -f db
+```
+
 ## Server (FastAPI)
 
 ### Run the server
 
-From the repo root, run your FastAPI app (however you already run it). If you’re using the included entrypoint:
+From the repo root, run your FastAPI app (however you already run it). If you're using the included entrypoint:
 
 ```bash
 python3 server/main.py
@@ -51,13 +134,13 @@ The server cancels any active stream task and confirms with JSON (`stream_cancel
 
 Open `testing/index.html` in a browser and click **Connect**.
 
-- If opened via `file://`, the client defaults to `ws://localhost:8000/websocket`.
-- If served over HTTPS, the client will automatically use `wss://…/websocket`.
+- If opened via `file://`, the client defaults to `ws://localhost:8000/api/v1/websocket/`.
+- If served over HTTPS, the client will automatically use `wss://…/api/v1/websocket/`.
 
 ### Integrate in your app (minimal snippet)
 
 ```js
-const ws = new WebSocket("ws://localhost:8000/websocket");
+const ws = new WebSocket("ws://localhost:8000/api/v1/websocket/");
 ws.binaryType = "arraybuffer";
 
 ws.onopen = () => {
@@ -77,5 +160,7 @@ ws.onmessage = (event) => {
 ## Where the code lives
 
 - **Server WebSocket endpoint**: `server/api/v1/routes/websocket.py`
+- **Server Voice Processing**: `server/api/v1/routes/voice_processing.py`
 - **Server app wiring**: `server/main.py`
 - **Demo client**: `testing/index.html`
+- **React Voice UI**: `client/src/pages/Voice.tsx`

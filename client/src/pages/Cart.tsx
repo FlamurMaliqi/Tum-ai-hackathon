@@ -3,31 +3,81 @@ import { Minus, Plus, Trash2, ShoppingBag } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { BottomNav } from "@/components/BottomNav";
 import { useCart } from "@/hooks/useCart";
-import { useOrders } from "@/hooks/useOrders";
 import { useToast } from "@/hooks/use-toast";
+import { useCreateOrder } from "@/hooks/useOrdersBackend";
+import { useConstructionSites } from "@/hooks/useConstructionSites";
 
 export default function Cart() {
   const navigate = useNavigate();
   const { items, updateQuantity, removeItem, clearCart, totalPrice } = useCart();
-  const { addOrder } = useOrders();
   const { toast } = useToast();
+  const createOrderMutation = useCreateOrder();
+  const { data: constructionSites = [], isLoading: isLoadingSites } = useConstructionSites();
+  
   const [foremanName, setForemanName] = useState("Hans Müller");
-  const [projectName, setProjectName] = useState("Bauprojekt Mitte");
+  const [constructionSiteName, setConstructionSiteName] = useState<string>("");
+  const [orderNotes, setOrderNotes] = useState("");
 
-  const handleSubmitOrder = () => {
+  const handleSubmitOrder = async () => {
     if (items.length === 0) return;
     
-    const order = addOrder(items, foremanName, projectName);
-    clearCart();
-    
-    toast({
-      title: "Bestellung aufgegeben",
-      description: `Bestellung ${order.id} wurde erfolgreich erstellt.`,
-    });
-    
-    navigate("/orders");
+    if (!foremanName.trim() || !constructionSiteName.trim()) {
+      toast({
+        title: "Informationen erforderlich",
+        description: "Bitte geben Sie Polier-Name und Baustelle ein.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Prepare order data in backend format
+      const orderData = {
+        polier_name: foremanName.trim(),
+        projekt_name: constructionSiteName.trim(),
+        items: items.map(item => ({
+          artikel_id: item.product.id,
+          artikel_name: item.product.name,
+          menge: item.quantity,
+          einheit: item.product.unit,
+          einzelpreis: item.product.price,
+        })),
+        erstellt_von: undefined, // Can be added later if user authentication is implemented
+      };
+
+      const newOrder = await createOrderMutation.mutateAsync(orderData);
+      
+      clearCart();
+      
+      // Show different messages based on approval status
+      const isAutoApproved = newOrder.status === 'approved';
+      
+      toast({
+        title: isAutoApproved ? "Bestellung genehmigt" : "Bestellung eingereicht",
+        description: isAutoApproved 
+          ? `Bestellung ${newOrder.id} wurde automatisch genehmigt (unter 100€).`
+          : `Bestellung ${newOrder.id} wartet auf Genehmigung (100€ oder mehr).`,
+      });
+      
+      navigate("/orders");
+    } catch (error) {
+      console.error("Failed to submit order:", error);
+      toast({
+        title: "Fehler",
+        description: error instanceof Error ? error.message : "Bestellung konnte nicht erstellt werden.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (items.length === 0) {
@@ -67,20 +117,46 @@ export default function Cart() {
         <div className="bg-card rounded-2xl border border-border/50 p-4 mb-4 card-shadow">
           <h2 className="font-semibold mb-3">Bestellinformationen</h2>
           <div className="space-y-3">
+            {/* Foreman Name */}
             <div>
-              <label className="text-sm text-muted-foreground">Polier</label>
+              <label className="text-sm text-muted-foreground">Polier-Name *</label>
               <Input
                 value={foremanName}
                 onChange={(e) => setForemanName(e.target.value)}
+                placeholder="z.B. Hans Müller"
                 className="mt-1 rounded-xl bg-secondary border-0"
               />
             </div>
+
+            {/* Construction Site */}
             <div>
-              <label className="text-sm text-muted-foreground">Projekt</label>
-              <Input
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
-                className="mt-1 rounded-xl bg-secondary border-0"
+              <label className="text-sm text-muted-foreground">Baustelle *</label>
+              <Select
+                value={constructionSiteName}
+                onValueChange={setConstructionSiteName}
+                disabled={isLoadingSites}
+              >
+                <SelectTrigger className="mt-1 rounded-xl bg-secondary border-0 h-12">
+                  <SelectValue placeholder={isLoadingSites ? "Lade Baustellen..." : "Baustelle auswählen"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {constructionSites.map((site) => (
+                    <SelectItem key={site.id} value={site.name}>
+                      {site.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Notes */}
+            <div>
+              <label className="text-sm text-muted-foreground">Notizen (optional)</label>
+              <Textarea
+                value={orderNotes}
+                onChange={(e) => setOrderNotes(e.target.value)}
+                placeholder="Zusätzliche Informationen zur Bestellung..."
+                className="mt-1 rounded-xl bg-secondary border-0 min-h-[80px]"
               />
             </div>
           </div>
@@ -100,63 +176,51 @@ export default function Cart() {
                     €{item.product.price.toFixed(2)} / {item.product.unit}
                   </p>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-destructive h-9 w-9 rounded-xl"
+                <button
                   onClick={() => removeItem(item.product.id)}
+                  className="text-destructive hover:bg-destructive/10 p-2 rounded-lg transition-colors"
                 >
                   <Trash2 className="h-4 w-4" />
-                </Button>
+                </button>
               </div>
 
               <div className="flex items-center justify-between">
-                <div className="flex items-center bg-secondary rounded-xl overflow-hidden">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-10 w-10 rounded-none"
-                    onClick={() =>
-                      updateQuantity(item.product.id, item.quantity - 1)
-                    }
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
+                    className="h-8 w-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-secondary/80 transition-colors"
                   >
                     <Minus className="h-4 w-4" />
-                  </Button>
-                  <span className="w-10 text-center font-semibold">
-                    {item.quantity}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-10 w-10 rounded-none"
-                    onClick={() =>
-                      updateQuantity(item.product.id, item.quantity + 1)
-                    }
+                  </button>
+                  <span className="w-12 text-center font-semibold">{item.quantity}</span>
+                  <button
+                    onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
+                    className="h-8 w-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-secondary/80 transition-colors"
                   >
                     <Plus className="h-4 w-4" />
-                  </Button>
+                  </button>
                 </div>
-                <span className="font-bold text-lg">
+                <p className="text-lg font-semibold">
                   €{(item.product.price * item.quantity).toFixed(2)}
-                </span>
+                </p>
               </div>
             </div>
           ))}
         </div>
       </main>
 
-      {/* Fixed Footer */}
-      <div className="fixed bottom-20 left-0 right-0 glass border-t border-border/50 p-4">
+      {/* Bottom Checkout Section */}
+      <div className="fixed bottom-16 left-0 right-0 bg-card border-t border-border/50 p-4 card-shadow">
         <div className="flex items-center justify-between mb-4">
-          <span className="text-base font-medium text-muted-foreground">Gesamt</span>
-          <span className="text-2xl font-bold">€{totalPrice.toFixed(2)}</span>
+          <span className="text-lg font-semibold">Gesamt</span>
+          <span className="text-2xl font-bold text-primary">€{totalPrice.toFixed(2)}</span>
         </div>
         <Button
           onClick={handleSubmitOrder}
-          className="w-full h-14 text-base font-semibold rounded-xl"
-          disabled={!foremanName || !projectName}
+          disabled={createOrderMutation.isPending || !foremanName.trim() || !constructionSiteName.trim()}
+          className="w-full h-12 rounded-xl text-base"
         >
-          Bestellung aufgeben
+          {createOrderMutation.isPending ? "Wird gesendet..." : "Bestellung aufgeben"}
         </Button>
       </div>
 

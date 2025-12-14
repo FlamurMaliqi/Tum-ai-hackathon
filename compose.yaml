@@ -3,8 +3,12 @@ services:
     build:
       context: client
       dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=http://localhost:8000
     ports:
       - 3000:3000
+    depends_on:
+      - server
 
   server:
     build:
@@ -13,7 +17,8 @@ services:
     ports:
       - 8000:8000
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     environment:
       - DATABASE_URL=postgresql://artikel_user:artikel_pass@db:5432/artikel_db
     env_file:
@@ -30,6 +35,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U artikel_user -d artikel_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:

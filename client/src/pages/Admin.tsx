@@ -114,6 +114,7 @@ export default function Admin() {
 
   const handlePinSubmit = () => {
     if (pin === ADMIN_PIN) {
+      navigate("/admin/dashboard");
       setIsAuthenticated(true);
       setError(false);
     } else {

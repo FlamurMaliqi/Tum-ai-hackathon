@@ -12,7 +12,8 @@ def get_all_inventory() -> List[Dict]:
                     artikel_id,
                     artikelname,
                     kategorie,
-                    lieferant
+                    lieferant,
+                    construction_site
                 FROM inventory
                 ORDER BY artikel_id
             """)
