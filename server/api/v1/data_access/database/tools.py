@@ -87,7 +87,9 @@ def get_inventory_items_by_name_regex(name_regex: str) -> List[Dict]:
                     artikel_id,
                     artikelname,
                     kategorie,
-                    lieferant
+                    lieferant,
+                    construction_site,
+                    quantity
                 FROM inventory
                 WHERE artikelname ~* %s
                 ORDER BY artikelname ASC, artikel_id ASC

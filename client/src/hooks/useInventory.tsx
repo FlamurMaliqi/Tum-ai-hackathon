@@ -7,6 +7,7 @@ export interface InventoryItem {
   kategorie: string;
   lieferant: string;
   construction_site: string;
+  quantity?: number;
 }
 
 async function fetchInventory(): Promise<InventoryItem[]> {

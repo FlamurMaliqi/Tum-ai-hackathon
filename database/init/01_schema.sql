@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS inventory (
     artikelname VARCHAR(255) NOT NULL,
     kategorie VARCHAR(100),
     lieferant VARCHAR(100),
-    construction_site VARCHAR(100)
+    construction_site VARCHAR(100),
+    quantity INTEGER DEFAULT 0
 );
 
 -- Create the bestellungen (Orders) table

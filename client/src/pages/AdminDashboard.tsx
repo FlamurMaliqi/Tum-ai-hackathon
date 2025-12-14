@@ -99,7 +99,7 @@ export default function AdminDashboard() {
       const mappedInventory: InventoryItemDisplay[] = backendInventory.map(item => ({
         sku: item.artikel_id,
         name: item.artikelname,
-        qty: 0, // Inventory table doesn't have quantity field - using 0 as default
+        qty: item.quantity || 0,
         site: item.construction_site || "Unbekannt"
       }));
       setInventory(mappedInventory);
