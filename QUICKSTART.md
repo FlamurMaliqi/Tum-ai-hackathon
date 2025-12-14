@@ -1,24 +1,24 @@
 # ElevenLabs Realtime Speech-to-Text - Quick Start Guide
 
-## ✅ What's Been Implemented
+## What's Been Implemented
 
 ### Backend (Python/FastAPI)
-- ✅ ElevenLabs Python SDK installed
-- ✅ Token generation endpoint: `/api/v1/elevenlabs-token/`
-- ✅ WebSocket proxy service: `/api/v1/scribe/ws`
-- ✅ Bidirectional audio streaming to ElevenLabs API
-- ✅ Real-time transcript forwarding to client
-- ✅ Error handling and connection management
+- ElevenLabs Python SDK installed
+- Token generation endpoint: `/api/v1/elevenlabs-token/`
+- WebSocket proxy service: `/api/v1/scribe/ws`
+- Bidirectional audio streaming to ElevenLabs API
+- Real-time transcript forwarding to client
+- Error handling and connection management
 
 ### Frontend (React/TypeScript)
-- ✅ ElevenLabs React SDK installed (`@elevenlabs/react`)
-- ✅ Voice.tsx updated with `useScribe` hook
-- ✅ Microphone recording controls
-- ✅ Real-time transcript display
-- ✅ Partial and committed transcript handling
-- ✅ Modern UI with recording indicators
+- ElevenLabs React SDK installed (`@elevenlabs/react`)
+- Voice.tsx updated with `useScribe` hook
+- Microphone recording controls
+- Real-time transcript display
+- Partial and committed transcript handling
+- Modern UI with recording indicators
 
-## 🚀 How to Run
+## How to Run
 
 ### 1. Set Up Environment Variables
 
@@ -62,7 +62,7 @@ python test_elevenlabs.py
 4. Start speaking
 5. Watch real-time transcription appear
 
-## 📋 Key Features
+## Key Features
 
 ### Real-Time Transcription
 - **Partial transcripts**: Live updates as you speak (shown with pulse animation)
@@ -80,7 +80,7 @@ python test_elevenlabs.py
 - Single-use tokens (expire after 15 minutes)
 - Secure WebSocket connections
 
-## 🔧 Architecture
+## Architecture
 
 ```
 ┌─────────────┐          ┌──────────────┐          ┌──────────────┐
@@ -103,25 +103,25 @@ python test_elevenlabs.py
      │ 6. Receive Transcripts   │                          │
 ```
 
-## 📁 Files Created/Modified
+## Files Created/Modified
 
 ### Backend
-- ✅ `server/api/v1/services/scribe_service.py` - WebSocket proxy service
-- ✅ `server/api/v1/routes/scribe.py` - WebSocket endpoint
-- ✅ `server/api/v1/routes/__init__.py` - Router registration
-- ✅ `server/main.py` - Added scribe router
-- ✅ `server/pyproject.toml` - Added dependencies
-- ✅ `server/test_elevenlabs.py` - Test script
+- `server/api/v1/services/scribe_service.py` - WebSocket proxy service
+- `server/api/v1/routes/scribe.py` - WebSocket endpoint
+- `server/api/v1/routes/__init__.py` - Router registration
+- `server/main.py` - Added scribe router
+- `server/pyproject.toml` - Added dependencies
+- `server/test_elevenlabs.py` - Test script
 
 ### Frontend
-- ✅ `client/src/pages/Voice.tsx` - Updated with real transcription
-- ✅ `client/package.json` - Added @elevenlabs/react
+- `client/src/pages/Voice.tsx` - Updated with real transcription
+- `client/package.json` - Added @elevenlabs/react
 
 ### Documentation
-- ✅ `ELEVENLABS_INTEGRATION.md` - Comprehensive guide
-- ✅ `QUICKSTART.md` - This file
+- `ELEVENLABS_INTEGRATION.md` - Comprehensive guide
+- `QUICKSTART.md` - This file
 
-## 🎯 Next Steps (Optional Enhancements)
+## Next Steps (Optional Enhancements)
 
 ### 1. Product Extraction (NLP)
 Add AI to extract products from transcripts:
@@ -161,7 +161,7 @@ Implement special commands:
 ### 5. Multi-Session Support
 Allow multiple concurrent transcription sessions with session management.
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### "Cannot connect to server"
 - Make sure backend is running: `python main.py`
@@ -184,14 +184,14 @@ Allow multiple concurrent transcription sessions with session management.
 - Look for errors in browser console
 - Verify ElevenLabs API quota
 
-## 📚 Resources
+## Resources
 
 - **ElevenLabs Docs**: https://elevenlabs.io/docs/developers/guides/cookbooks/speech-to-text/streaming
 - **React SDK**: https://www.npmjs.com/package/@elevenlabs/react
 - **API Reference**: https://elevenlabs.io/docs/api-reference
 - **Dashboard**: https://elevenlabs.io/app
 
-## 💡 Tips
+## Tips
 
 1. **Test with simple phrases first** to verify the system is working
 2. **Use headphones** to avoid echo/feedback
@@ -199,7 +199,7 @@ Allow multiple concurrent transcription sessions with session management.
 4. **Check the browser console** for detailed error messages
 5. **Monitor backend logs** for server-side issues
 
-## 📞 Support
+## Support
 
 If you encounter issues:
 1. Check the detailed documentation in `ELEVENLABS_INTEGRATION.md`
@@ -209,4 +209,4 @@ If you encounter issues:
 
 ---
 
-**Ready to test?** Run the test script or open the Voice page and start speaking! 🎤
+**Ready to test?** Run the test script or open the Voice page and start speaking!

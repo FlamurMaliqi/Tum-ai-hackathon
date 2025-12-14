@@ -4,12 +4,12 @@ This implementation integrates ElevenLabs Scribe v2 Realtime for real-time speec
 
 ## Features
 
-- 🎤 **Real-time transcription** with ultra-low latency
-- 🔊 **Microphone streaming** directly from the browser
-- 📝 **Partial and committed transcripts** for live feedback
-- 🌍 **Multi-language support** (optional language specification)
-- ⏱️ **Word-level timestamps** (optional)
-- 🔒 **Secure token-based authentication** (API key never exposed to client)
+- **Real-time transcription** with ultra-low latency
+- **Microphone streaming** directly from the browser
+- **Partial and committed transcripts** for live feedback
+- **Multi-language support** (optional language specification)
+- **Word-level timestamps** (optional)
+- **Secure token-based authentication** (API key never exposed to client)
 
 ## Architecture
 

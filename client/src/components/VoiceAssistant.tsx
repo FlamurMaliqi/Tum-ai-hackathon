@@ -3,6 +3,7 @@ import { useScribe } from "@elevenlabs/react";
 import { Mic, MicOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiUrl } from "@/lib/api";
+import { useLanguage } from "@/hooks/useLanguage";
 
 type VoiceAssistantProps = {
   wsUrl?: string;
@@ -10,21 +11,22 @@ type VoiceAssistantProps = {
   className?: string;
 };
 
-function defaultWsUrl(): string {
-  if (typeof window === "undefined") return "ws://localhost:8000/api/v1/websocket/";
+function defaultWsUrl(language: string = "en"): string {
+  if (typeof window === "undefined") return `ws://localhost:8000/api/v1/websocket/?language=${language}`;
 
   const explicitApiBase = import.meta.env.VITE_API_URL;
   if (typeof explicitApiBase === "string" && explicitApiBase.length > 0) {
     const u = new URL(explicitApiBase);
     const wsProtocol = u.protocol === "https:" ? "wss:" : "ws:";
-    return `${wsProtocol}//${u.host}/api/v1/websocket/`;
+    return `${wsProtocol}//${u.host}/api/v1/websocket/?language=${language}`;
   }
 
   const scheme = window.location.protocol === "https:" ? "wss" : "ws";
-  return `${scheme}://${window.location.host}/api/v1/websocket/`;
+  return `${scheme}://${window.location.host}/api/v1/websocket/?language=${language}`;
 }
 
 export function VoiceAssistant({ wsUrl, tokenEndpoint, className }: VoiceAssistantProps) {
+  const { language } = useLanguage();
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [transcriptVisible, setTranscriptVisible] = useState(false);
@@ -90,7 +92,8 @@ export function VoiceAssistant({ wsUrl, tokenEndpoint, className }: VoiceAssista
       const body: unknown = await res.json();
       const token = (body as { token?: unknown })?.token;
       if (typeof token !== "string" || token.length === 0) throw new Error("Missing token");
-      await scribeRef.current.connect({ token, languageCode: "en", microphone: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      const scribeLanguageCode = language === "de" ? "de" : "en";
+      await scribeRef.current.connect({ token, languageCode: scribeLanguageCode, microphone: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
     } catch (e) { console.error("Scribe reconnect failed:", e); }
   };
 
@@ -175,7 +178,7 @@ export function VoiceAssistant({ wsUrl, tokenEndpoint, className }: VoiceAssista
   useEffect(() => { scribeRef.current = scribe; }, [scribe]);
 
   useEffect(() => {
-    const url = wsUrl ?? defaultWsUrl();
+    const url = wsUrl ?? defaultWsUrl(language);
     setConnectionStatus("Connecting...");
     let ws: WebSocket;
     try { ws = new WebSocket(url); } catch (e) {
@@ -268,7 +271,7 @@ export function VoiceAssistant({ wsUrl, tokenEndpoint, className }: VoiceAssista
       if (audioRef.current) { try { audioRef.current.pause(); } catch { /* ignore */ } audioRef.current = null; }
       if (audioUrlRef.current) { try { URL.revokeObjectURL(audioUrlRef.current); } catch { /* ignore */ } audioUrlRef.current = null; }
     };
-  }, [wsUrl]);
+  }, [wsUrl, language]);
 
   useEffect(() => {
     return () => {
@@ -284,20 +287,33 @@ export function VoiceAssistant({ wsUrl, tokenEndpoint, className }: VoiceAssista
     try {
       if (websocketRef.current?.readyState !== WebSocket.OPEN) throw new Error("WebSocket not connected");
 
-      const greetingText = "Hi — I can help you put together a quick supply order for the site.";
+      const greetingText = language === "de" 
+        ? "Hallo — ich kann dir helfen, eine schnelle Materialbestellung für die Baustelle zusammenzustellen."
+        : "Hi — I can help you put together a quick supply order for the site.";
+      const greetingAudioFile = language === "de" ? "/greeting_de.mp3" : "/greeting.mp3";
+      
       setAgentState("greeting");
       setDisplayedResponse("");
       setResponseVisible(true);
       
+      // Try to play greeting audio, fall back to just showing text if audio fails
+      let audioPlayed = false;
       try {
-        const greetingAudio = new Audio("/greeting.mp3");
+        const greetingAudio = new Audio(greetingAudioFile);
         greetingAudio.onloadedmetadata = () => startWordReveal(greetingText, greetingAudio.duration * 1000);
         await greetingAudio.play();
+        audioPlayed = true;
         await new Promise<void>((resolve) => {
           greetingAudio.onended = () => { setDisplayedResponse(greetingText); if (wordRevealIntervalRef.current) { clearInterval(wordRevealIntervalRef.current); wordRevealIntervalRef.current = null; } resolve(); };
           greetingAudio.onerror = () => { setDisplayedResponse(greetingText); resolve(); };
         });
-      } catch { setDisplayedResponse(greetingText); }
+      } catch { /* audio failed, will show text below */ }
+      
+      if (!audioPlayed) {
+        // No audio available, just show the text with a brief delay
+        setDisplayedResponse(greetingText);
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
 
       const resolvedTokenEndpoint = tokenEndpoint ?? apiUrl("/api/v1/elevenlabs-token/");
       tokenEndpointRef.current = resolvedTokenEndpoint;
@@ -307,7 +323,9 @@ export function VoiceAssistant({ wsUrl, tokenEndpoint, className }: VoiceAssista
       const token = (body as { token?: unknown })?.token;
       if (typeof token !== "string" || token.length === 0) throw new Error("Missing token");
 
-      await scribe.connect({ token, languageCode: "en", microphone: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      // Use the appropriate language code for ElevenLabs Scribe STT
+      const scribeLanguageCode = language === "de" ? "de" : "en";
+      await scribe.connect({ token, languageCode: scribeLanguageCode, microphone: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
 
       lastTranscriptRef.current = "";
       hasSentRef.current = false;
@@ -340,15 +358,15 @@ export function VoiceAssistant({ wsUrl, tokenEndpoint, className }: VoiceAssista
 
   const getStatusText = () => {
     if (connectionStatus.startsWith("Error:")) return connectionStatus;
-    if (connectionStatus === "Disconnected") return "Disconnected";
-    if (connectionStatus === "Connecting...") return "Connecting...";
-    if (!isRecording) return "Click the microphone to begin";
+    if (connectionStatus === "Disconnected") return language === "de" ? "Getrennt" : "Disconnected";
+    if (connectionStatus === "Connecting...") return language === "de" ? "Verbinde..." : "Connecting...";
+    if (!isRecording) return language === "de" ? "Klicke auf das Mikrofon zum Starten" : "Click the microphone to begin";
     switch (agentState) {
-      case "greeting": return "👋 Greeting...";
-      case "listening": return "🎤 Listening...";
-      case "thinking": return `🤔 Thinking${".".repeat(thinkingDots)}`;
-      case "responding": return "🗣️ Responding...";
-      default: return "Ready";
+      case "greeting": return language === "de" ? "Begrüßung..." : "Greeting...";
+      case "listening": return language === "de" ? "Höre zu..." : "Listening...";
+      case "thinking": return language === "de" ? `Denke nach${".".repeat(thinkingDots)}` : `Thinking${".".repeat(thinkingDots)}`;
+      case "responding": return language === "de" ? "Antworte..." : "Responding...";
+      default: return language === "de" ? "Bereit" : "Ready";
     }
   };
 
@@ -415,10 +433,10 @@ export function VoiceAssistant({ wsUrl, tokenEndpoint, className }: VoiceAssista
           agentState === "listening" ? "bg-green-500" : "bg-destructive/40"
         )} aria-hidden="true" />
         <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
-          {!isRecording ? "Ready" :
-           agentState === "listening" ? "Listening" :
-           agentState === "thinking" ? "Processing" :
-           agentState === "responding" ? "Speaking" : "Active"}
+          {!isRecording ? (language === "de" ? "Bereit" : "Ready") :
+           agentState === "listening" ? (language === "de" ? "Höre zu" : "Listening") :
+           agentState === "thinking" ? (language === "de" ? "Verarbeite" : "Processing") :
+           agentState === "responding" ? (language === "de" ? "Spreche" : "Speaking") : (language === "de" ? "Aktiv" : "Active")}
         </span>
       </div>
     </div>

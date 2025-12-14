@@ -629,10 +629,10 @@ export function TestButton({
     if (!isRecording) return "Ready";
     
     switch (agentState) {
-      case "greeting": return "👋 Greeting...";
-      case "listening": return "🎤 Listening...";
-      case "thinking": return `🤔 Thinking${".".repeat(thinkingDots)}`;
-      case "responding": return "🗣️ Responding...";
+      case "greeting": return "Greeting...";
+      case "listening": return "Listening...";
+      case "thinking": return `Thinking${".".repeat(thinkingDots)}`;
+      case "responding": return "Responding...";
       default: return "Ready";
     }
   };

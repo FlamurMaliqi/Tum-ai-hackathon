@@ -453,6 +453,6 @@ else:
 
 ---
 
-**The automatic approval system is now ready to use! 🎉**
+**The automatic approval system is now ready to use!**
 
 Orders under 100€ will be instantly approved, while larger orders will wait for admin review.

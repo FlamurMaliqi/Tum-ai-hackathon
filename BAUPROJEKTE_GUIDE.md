@@ -231,14 +231,14 @@ Add to your admin menu:
 ## Validation Rules
 
 ### Orders:
-- ✅ `projekt_id` is **required**
-- ✅ `items` array must not be empty
-- ✅ `notes` is optional (max recommended: 1000 characters)
+- `projekt_id` is **required**
+- `items` array must not be empty
+- `notes` is optional (max recommended: 1000 characters)
 
 ### Projects:
-- ✅ `name` is **required**
-- ✅ `status` must be one of: 'active', 'completed', 'on_hold'
-- ✅ Other fields are optional
+- `name` is **required**
+- `status` must be one of: 'active', 'completed', 'on_hold'
+- Other fields are optional
 
 ## Status Indicators
 
@@ -313,4 +313,4 @@ curl -X POST http://localhost:8001/api/v1/bestellungen/ \
 
 ---
 
-**All features are now ready to use! 🎉**
+**All features are now ready to use!**

@@ -2,7 +2,9 @@ import { useState } from "react";
 import { ArrowLeft, Minus, Plus, X, ShoppingCart } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { useCart } from "@/hooks/useCart";
+import { useLanguage } from "@/hooks/useLanguage";
 import { products } from "@/data/products";
 import { VoiceAssistant } from "@/components/VoiceAssistant";
 
@@ -16,6 +18,7 @@ interface VoiceOrderItem {
 export default function Voice() {
   const navigate = useNavigate();
   const { addItem } = useCart();
+  const { language, toggleLanguage } = useLanguage();
   const [orderItems, setOrderItems] = useState<VoiceOrderItem[]>([]);
 
   // Update item quantity
@@ -61,23 +64,35 @@ export default function Voice() {
             </Button>
             <div className="flex flex-col">
               <h1 className="text-base font-semibold text-foreground leading-tight">
-                Voice Assistant
+                {language === "de" ? "Sprachassistent" : "Voice Assistant"}
               </h1>
               <p className="text-xs text-muted-foreground leading-tight">
-                AI-powered ordering
+                {language === "de" ? "KI-gestützte Bestellung" : "AI-powered ordering"}
               </p>
             </div>
           </div>
-          {orderItems.length > 0 && (
-            <Button 
-              onClick={handleAddToCart}
-              size="sm"
-              className="gap-2 h-9"
-            >
-              <ShoppingCart className="h-4 w-4" />
-              <span className="hidden sm:inline">Add to Cart</span>
-            </Button>
-          )}
+          <div className="flex items-center gap-3">
+            {/* Language Toggle */}
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-medium ${language === "en" ? "text-foreground" : "text-muted-foreground"}`}>EN</span>
+              <Switch
+                checked={language === "de"}
+                onCheckedChange={toggleLanguage}
+                aria-label="Toggle language"
+              />
+              <span className={`text-xs font-medium ${language === "de" ? "text-foreground" : "text-muted-foreground"}`}>DE</span>
+            </div>
+            {orderItems.length > 0 && (
+              <Button 
+                onClick={handleAddToCart}
+                size="sm"
+                className="gap-2 h-9"
+              >
+                <ShoppingCart className="h-4 w-4" />
+                <span className="hidden sm:inline">{language === "de" ? "In den Warenkorb" : "Add to Cart"}</span>
+              </Button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -88,10 +103,10 @@ export default function Voice() {
           <div className="px-4 py-4">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Current Order
+                {language === "de" ? "Aktuelle Bestellung" : "Current Order"}
               </h2>
               <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
-                {orderItems.length} {orderItems.length === 1 ? "item" : "items"}
+                {orderItems.length} {orderItems.length === 1 ? (language === "de" ? "Artikel" : "item") : (language === "de" ? "Artikel" : "items")}
               </span>
             </div>
             <div className="space-y-2 max-h-48 overflow-y-auto">
