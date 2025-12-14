@@ -4,6 +4,8 @@ import { Package, ArrowDownCircle, ArrowUpCircle, MapPin, ArrowLeft, X, Plus, Tr
 import { useNavigate } from "react-router-dom";
 import { useOrdersBackend, useUpdateOrderStatus } from "@/hooks/useOrdersBackend";
 import { Order as BackendOrder, OrderStatus } from "@/data/orders";
+import { useConstructionSites } from "@/hooks/useConstructionSites";
+import { useInventory } from "@/hooks/useInventory";
 
 type Order = {
   id: string;
@@ -15,7 +17,7 @@ type Order = {
   projectName?: string;
 };
 
-type InventoryItem = { sku: string; name: string; qty: number; site: string };
+type InventoryItemDisplay = { sku: string; name: string; qty: number; site: string };
 type Shipment = {
   id: string;
   type: "incoming" | "outgoing";
@@ -67,11 +69,7 @@ const mockOrders: Order[] = [
   },
 ];
 
-const mockInventory: InventoryItem[] = [
-  { sku: "ABC-123", name: "Sample Item", qty: 120, site: "Overview" },
-  { sku: "DEF-456", name: "Motor Assembly", qty: 42, site: "Site A" },
-  { sku: "XYZ-789", name: "Sensor Kit", qty: 18, site: "Site B" },
-];
+// Mock inventory removed - now using backend data
 
 const mockShipments: Shipment[] = [
   { id: "SHP-001", type: "incoming", ref: "PO-7781", eta: "2025-12-15", items: 320, site: "Overview" },
@@ -81,11 +79,42 @@ const mockShipments: Shipment[] = [
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const [sites, setSites] = useState<string[]>(["Overview", "Site A", "Site B"]);
-  const [site, setSite] = useState<string>("Overview");
-  const [newSite, setNewSite] = useState("");
-  const [inventory, setInventory] = useState<InventoryItem[]>(mockInventory);
+  
+  // Fetch construction sites from backend
+  const { data: constructionSites = [], isLoading: isLoadingSites } = useConstructionSites();
+  const { data: backendInventory = [], isLoading: isLoadingInventory } = useInventory();
+  
+  // Convert construction sites to string array for site selector, with "All" option
+  const sites = useMemo(() => {
+    return ["All", ...constructionSites.map(site => site.name)];
+  }, [constructionSites]);
+  
+  const [site, setSite] = useState<string>("All");
+  const [inventory, setInventory] = useState<InventoryItemDisplay[]>([]);
   const [newItem, setNewItem] = useState<{ sku: string; name: string; qty: number }>({ sku: "", name: "", qty: 0 });
+  
+  // Update inventory when backend data changes
+  useEffect(() => {
+    if (backendInventory.length > 0) {
+      const mappedInventory: InventoryItemDisplay[] = backendInventory.map(item => ({
+        sku: item.artikel_id,
+        name: item.artikelname,
+        qty: 0, // Inventory table doesn't have quantity field - using 0 as default
+        site: item.construction_site || "Unbekannt"
+      }));
+      setInventory(mappedInventory);
+    } else if (!isLoadingInventory) {
+      // Clear inventory if no data and not loading
+      setInventory([]);
+    }
+  }, [backendInventory, isLoadingInventory]);
+  
+  // Update site when construction sites load (default to "All")
+  useEffect(() => {
+    if (sites.length > 0 && site === "") {
+      setSite("All");
+    }
+  }, [sites, site]);
 
   // Editable shipments state
   const [shipments, setShipments] = useState<Shipment[]>(mockShipments);
@@ -99,25 +128,29 @@ export default function AdminDashboard() {
     site,
   });
 
-  const filteredInventory = useMemo(() => inventory.filter((i) => i.site === site), [inventory, site]);
-  const incoming = useMemo(() => shipments.filter((s) => s.type === "incoming" && s.site === site), [shipments, site]);
-  const outgoing = useMemo(() => shipments.filter((s) => s.type === "outgoing" && s.site === site), [shipments, site]);
+  const filteredInventory = useMemo(() => {
+    if (site === "All") {
+      return inventory; // Show all inventory items
+    }
+    return inventory.filter((i) => i.site === site);
+  }, [inventory, site]);
+  
+  const incoming = useMemo(() => {
+    if (site === "All") {
+      return shipments.filter((s) => s.type === "incoming");
+    }
+    return shipments.filter((s) => s.type === "incoming" && s.site === site);
+  }, [shipments, site]);
+  
+  const outgoing = useMemo(() => {
+    if (site === "All") {
+      return shipments.filter((s) => s.type === "outgoing");
+    }
+    return shipments.filter((s) => s.type === "outgoing" && s.site === site);
+  }, [shipments, site]);
 
-  const addSite = () => {
-    const name = newSite.trim();
-    if (!name || sites.includes(name)) return;
-    setSites((prev) => [...prev, name]);
-    setNewSite("");
-    setSite(name);
-  };
-
-  const removeSite = (name: string) => {
-    if (name === "Overview") return;
-    setSites((prev) => prev.filter((s) => s !== name));
-    setInventory((prev) => prev.filter((i) => i.site !== name));
-    setShipments((prev) => prev.filter((s) => s.site !== name));
-    if (site === name) setSite("Overview");
-  };
+  // Sites are managed in the database, so we don't add/remove them here
+  // This would require backend endpoints for creating/deleting construction sites
 
   const handleInventoryChange = (sku: string, field: "name" | "qty", value: string) => {
     setInventory((prev) =>
@@ -196,44 +229,25 @@ export default function AdminDashboard() {
           </TabsList>
 
           <TabsContent value="inventory" className="space-y-5 mt-4">
-            {/* Site selector & manage */}
+            {/* Construction Site selector */}
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-muted-foreground" />
-                <label className="text-sm text-muted-foreground">Site</label>
                 <select
-                  className="border rounded px-3 py-2.5 text-sm bg-background min-w-[180px]"
+                  className="border rounded-lg px-4 py-2.5 text-sm bg-background min-w-[200px] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                   value={site}
                   onChange={(e) => setSite(e.target.value)}
+                  disabled={isLoadingSites}
                 >
-                  {sites.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
+                  {isLoadingSites ? (
+                    <option>Loading sites...</option>
+                  ) : sites.length === 0 ? (
+                    <option>No sites available</option>
+                  ) : (
+                    sites.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))
+                  )}
                 </select>
-                {site !== "Overview" && (
-                  <button
-                    className="ml-2 inline-flex items-center px-2.5 py-2 text-sm rounded border border-destructive text-destructive hover:bg-destructive/10"
-                    onClick={() => removeSite(site)}
-                    aria-label="Remove site"
-                    title="Remove site"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-              <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-                <input
-                  className="border rounded px-3 py-2 text-sm bg-background flex-1"
-                  placeholder="New site name"
-                  value={newSite}
-                  onChange={(e) => setNewSite(e.target.value)}
-                />
-                <button
-                  className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm rounded bg-primary text-primary-foreground hover:opacity-90"
-                  onClick={addSite}
-                >
-                  <Plus className="w-4 h-4" /> Add Site
-                </button>
               </div>
             </div>
 
@@ -242,11 +256,20 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-lg font-semibold">Current Inventory</h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">Stock levels for {site}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {site === "All" 
+                      ? "Stock levels across all construction sites" 
+                      : `Stock levels for ${site}`}
+                  </p>
                 </div>
               </div>
 
-              {filteredInventory.length === 0 ? (
+              {isLoadingInventory ? (
+                <div className="border-2 border-dashed rounded-2xl p-8 bg-card/40 backdrop-blur text-center">
+                  <Loader2 className="w-12 h-12 text-muted-foreground/50 mx-auto mb-3 animate-spin" />
+                  <p className="text-sm font-medium text-muted-foreground">Loading inventory...</p>
+                </div>
+              ) : filteredInventory.length === 0 ? (
                 <div className="border-2 border-dashed rounded-2xl p-8 bg-card/40 backdrop-blur text-center">
                   <Package className="w-12 h-12 text-muted-foreground/50 mx-auto mb-3" />
                   <p className="text-sm font-medium text-muted-foreground">No inventory for this site</p>
