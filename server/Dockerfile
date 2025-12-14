@@ -9,6 +9,7 @@ WORKDIR /app
 # Copy project files
 COPY pyproject.toml ./
 COPY main.py ./
+COPY cors.py ./
 COPY api/ ./api/
 
 # Install dependencies

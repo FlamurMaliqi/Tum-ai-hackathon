@@ -6,6 +6,7 @@ import { useCart } from "@/hooks/useCart";
 import { products } from "@/data/products";
 import { useScribe } from "@elevenlabs/react";
 import { apiUrl } from "@/lib/api";
+import { TestButton } from "@/components/TestButton";
 
 interface VoiceOrderItem {
   productId: string;
@@ -275,6 +276,8 @@ export default function Voice() {
               </p>
             )}
           </div>
+
+          <TestButton />
 
           {/* Voice Button */}
           <div className="relative">
