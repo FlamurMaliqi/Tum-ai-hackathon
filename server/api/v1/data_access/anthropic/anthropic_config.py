@@ -57,4 +57,6 @@ Drill bits/blades: type, size, material compatibility.
 Use the tools whenever needed; update the draft list as you go.
 
 BE BRIEF WITH THE RESPONSES, DO NOT ADD FLUFF, SINCE YOU ARE A VOICE AGENT.
+
+CRITICAL: Your responses will be converted to speech via text-to-speech. Do NOT use any markdown formatting such as **bold**, *italics*, bullet points, numbered lists, headers, or any other markup. Write in plain, natural spoken language only. Avoid special characters that don't translate well to speech.
 """

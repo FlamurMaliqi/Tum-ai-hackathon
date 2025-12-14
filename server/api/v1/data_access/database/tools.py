@@ -60,8 +60,7 @@ def get_product_prices_by_name_regex(name_regex: str) -> List[Dict]:
                     lieferant,
                     verbrauchsart,
                     gefahrgut,
-                    lagerort,
-                    typische_baustelle
+                    lagerort
                 FROM artikel
                 WHERE artikelname ~* %s
                 ORDER BY preis_eur ASC NULLS LAST, artikelname ASC, artikel_id ASC

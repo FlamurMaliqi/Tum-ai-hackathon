@@ -9,6 +9,8 @@ services:
       - 3000:3000
     depends_on:
       - server
+    networks:
+      - app-network
 
   server:
     build:
@@ -23,6 +25,8 @@ services:
       - DATABASE_URL=postgresql://artikel_user:artikel_pass@db:5432/artikel_db
     env_file:
       - server/.env
+    networks:
+      - app-network
 
   db:
     image: postgres:15-alpine
@@ -31,7 +35,7 @@ services:
       - POSTGRES_PASSWORD=artikel_pass
       - POSTGRES_DB=artikel_db
     ports:
-      - 5432:5432
+      - 5433:5432
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init:/docker-entrypoint-initdb.d
@@ -40,6 +44,12 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
 
 volumes:
   postgres_data:
