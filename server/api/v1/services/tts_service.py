@@ -34,7 +34,7 @@ async def stream_tts(text_iterator):
         # Send initial config (BOS - Beginning of Stream)
         await ws.send(json.dumps({
             "text": " ",
-            "voice_settings": {"stability": 0.7, "similarity_boost": 0.85, "speed": 1.15},
+            "voice_settings": {"stability": 0.7, "similarity_boost": 0.85, "speed": 1.2},
             "xi_api_key": api_key
         }))
         
