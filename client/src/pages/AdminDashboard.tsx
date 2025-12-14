@@ -1,6 +1,7 @@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useMemo, useState, useEffect } from "react";
-import { Package, ArrowDownCircle, ArrowUpCircle, MapPin, ArrowLeft, X, Plus, Trash2, Loader2, ChevronDown, Check } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Package, ArrowDownCircle, ArrowUpCircle, MapPin, ArrowLeft, X, Plus, Trash2, Loader2, ChevronDown, Check, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useOrdersBackend, useUpdateOrderStatus } from "@/hooks/useOrdersBackend";
 import { Order as BackendOrder, OrderStatus } from "@/data/orders";
@@ -17,7 +18,14 @@ type Order = {
   projectName?: string;
 };
 
-type InventoryItemDisplay = { sku: string; name: string; qty: number; site: string };
+type InventoryItemDisplay = { 
+  sku: string; 
+  name: string; 
+  qty: number; 
+  site: string;
+  category?: string;
+  supplier?: string;
+};
 type Shipment = {
   id: string;
   type: "incoming" | "outgoing";
@@ -79,10 +87,11 @@ const mockShipments: Shipment[] = [
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   
   // Fetch construction sites from backend
   const { data: constructionSites = [], isLoading: isLoadingSites } = useConstructionSites();
-  const { data: backendInventory = [], isLoading: isLoadingInventory } = useInventory();
+  const { data: backendInventory = [], isLoading: isLoadingInventory, refetch: refetchInventory } = useInventory();
   
   // Convert construction sites to string array for site selector, with "All" option
   const sites = useMemo(() => {
@@ -100,7 +109,9 @@ export default function AdminDashboard() {
         sku: item.artikel_id,
         name: item.artikelname,
         qty: item.quantity || 0,
-        site: item.construction_site || "Unbekannt"
+        site: item.construction_site || "Unbekannt",
+        category: item.kategorie,
+        supplier: item.lieferant
       }));
       setInventory(mappedInventory);
     } else if (!isLoadingInventory) {
@@ -260,8 +271,23 @@ export default function AdminDashboard() {
                     {site === "All" 
                       ? "Stock levels across all construction sites" 
                       : `Stock levels for ${site}`}
+                    {!isLoadingInventory && filteredInventory.length > 0 && (
+                      <span className="ml-2">
+                        • {filteredInventory.length} {filteredInventory.length === 1 ? 'item' : 'items'} 
+                        • {filteredInventory.reduce((sum, i) => sum + i.qty, 0).toLocaleString()} total units
+                      </span>
+                    )}
                   </p>
                 </div>
+                <button
+                  onClick={() => refetchInventory()}
+                  className="p-2 rounded-lg border border-border hover:bg-muted transition-colors disabled:opacity-50"
+                  title="Refresh inventory"
+                  aria-label="Refresh inventory"
+                  disabled={isLoadingInventory}
+                >
+                  <RefreshCw className={`w-4 h-4 ${isLoadingInventory ? 'animate-spin' : ''}`} />
+                </button>
               </div>
 
               {isLoadingInventory ? (
@@ -304,6 +330,27 @@ export default function AdminDashboard() {
                           onChange={(e) => handleInventoryChange(item.sku, "name", e.target.value)}
                           placeholder="Product name"
                         />
+                        {/* Category and Supplier Info */}
+                        {(item.category || item.supplier) && (
+                          <div className="flex items-center gap-2 mt-2 flex-wrap">
+                            {item.category && (
+                              <span className="text-xs px-2 py-0.5 rounded-md bg-muted text-muted-foreground">
+                                {item.category}
+                              </span>
+                            )}
+                            {item.supplier && (
+                              <span className="text-xs text-muted-foreground">
+                                {item.supplier}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {/* Construction Site Badge */}
+                        <div className="mt-2">
+                          <span className="text-xs px-2 py-0.5 rounded-md bg-secondary text-secondary-foreground">
+                            {item.site}
+                          </span>
+                        </div>
                       </div>
 
                       {/* Quantity Display */}
