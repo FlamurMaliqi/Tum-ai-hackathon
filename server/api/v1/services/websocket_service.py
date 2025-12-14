@@ -36,6 +36,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 from .claude_service import ClaudeServiceError, stream_claude_reply
 from .message_history_service import append_message
+from .tts_service import stream_tts
 
 logger = logging.getLogger(__name__)
 
@@ -118,12 +119,16 @@ async def handle_websocket(ws: WebSocket) -> None:
         assistant_text_parts: list[str] = []
         try:
             # `stream_claude_reply()` yields text chunks as they arrive.
-            async for text in stream_claude_reply(
-                user_text=user_text, conversation_id=conversation_id
-            ):
-                if text:
-                    assistant_text_parts.append(text)
-                    await ws.send_json({"type": "assistant_token", "text": text})
+            async def claude_text_stream():
+                async for text in stream_claude_reply(
+                    user_text=user_text, conversation_id=conversation_id
+                ):
+                    if text:
+                        assistant_text_parts.append(text)
+                        await ws.send_json({"type": "assistant_token", "text": text})
+
+            async for audio_chunk in stream_tts(claude_text_stream()):
+                await ws.send_bytes(audio_chunk)
         except asyncio.CancelledError:
             # Important: re-raise so upstream cancellation is respected.
             raise
