@@ -83,9 +83,21 @@ export default function AdminDashboard() {
   const [inventory, setInventory] = useState<InventoryItem[]>(mockInventory);
   const [newItem, setNewItem] = useState<{ sku: string; name: string; qty: number }>({ sku: "", name: "", qty: 0 });
 
+  // Editable shipments state
+  const [shipments, setShipments] = useState<Shipment[]>(mockShipments);
+  const [newShipment, setNewShipment] = useState<Shipment>({
+    id: "",
+    type: "incoming",
+    ref: "",
+    eta: "",
+    etd: "",
+    items: 0,
+    site,
+  });
+
   const filteredInventory = useMemo(() => inventory.filter((i) => i.site === site), [inventory, site]);
-  const incoming = useMemo(() => mockShipments.filter((s) => s.type === "incoming" && s.site === site), [site]);
-  const outgoing = useMemo(() => mockShipments.filter((s) => s.type === "outgoing" && s.site === site), [site]);
+  const incoming = useMemo(() => shipments.filter((s) => s.type === "incoming" && s.site === site), [shipments, site]);
+  const outgoing = useMemo(() => shipments.filter((s) => s.type === "outgoing" && s.site === site), [shipments, site]);
 
   const addSite = () => {
     const name = newSite.trim();
@@ -99,6 +111,7 @@ export default function AdminDashboard() {
     if (name === "Overview") return;
     setSites((prev) => prev.filter((s) => s !== name));
     setInventory((prev) => prev.filter((i) => i.site !== name));
+    setShipments((prev) => prev.filter((s) => s.site !== name));
     if (site === name) setSite("Overview");
   };
 
@@ -120,11 +133,36 @@ export default function AdminDashboard() {
     const sku = newItem.sku.trim();
     const name = newItem.name.trim();
     if (!sku || !name) return;
-    setInventory((prev) => [
-      ...prev,
-      { sku, name, qty: Number(newItem.qty) || 0, site },
-    ]);
+    setInventory((prev) => [...prev, { sku, name, qty: Number(newItem.qty) || 0, site }]);
     setNewItem({ sku: "", name: "", qty: 0 });
+  };
+
+  // Shipments editing
+  const handleShipmentChange = (id: string, field: keyof Shipment, value: string | number) => {
+    setShipments((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, [field]: field === "items" ? Number(value) || 0 : value } : s))
+    );
+  };
+
+  const removeShipment = (id: string) => {
+    setShipments((prev) => prev.filter((s) => s.id !== id));
+  };
+
+  const addShipment = () => {
+    if (!newShipment.ref.trim()) return;
+    const id = `SHP-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    setShipments((prev) => [
+      ...prev,
+      {
+        ...newShipment,
+        id,
+        site,
+        items: Number(newShipment.items) || 0,
+        eta: newShipment.type === "incoming" ? newShipment.eta : undefined,
+        etd: newShipment.type === "outgoing" ? newShipment.etd : undefined,
+      },
+    ]);
+    setNewShipment({ id: "", type: "incoming", ref: "", eta: "", etd: "", items: 0, site });
   };
 
   return (
@@ -160,7 +198,7 @@ export default function AdminDashboard() {
                 <MapPin className="w-4 h-4 text-muted-foreground" />
                 <label className="text-sm text-muted-foreground">Site</label>
                 <select
-                  className="border rounded px-3 py-2 text-sm bg-background"
+                  className="border rounded px-3 py-2.5 text-sm bg-background min-w-[180px]"
                   value={site}
                   onChange={(e) => setSite(e.target.value)}
                 >
@@ -168,6 +206,16 @@ export default function AdminDashboard() {
                     <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
+                {site !== "Overview" && (
+                  <button
+                    className="ml-2 inline-flex items-center px-2.5 py-2 text-sm rounded border border-destructive text-destructive hover:bg-destructive/10"
+                    onClick={() => removeSite(site)}
+                    aria-label="Remove site"
+                    title="Remove site"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
               <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
                 <input
@@ -183,28 +231,6 @@ export default function AdminDashboard() {
                   <Plus className="w-4 h-4" /> Add Site
                 </button>
               </div>
-            </div>
-
-            {/* Sites list (remove) */}
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {sites.map((s) => (
-                <div
-                  key={s}
-                  className={`inline-flex items-center gap-2 px-3 py-2 rounded-full border text-sm ${
-                    s === site ? "border-primary text-primary bg-primary/10" : "border-muted-foreground/30"
-                  }`}
-                >
-                  <span onClick={() => setSite(s)} className="cursor-pointer select-none">{s}</span>
-                  {s !== "Overview" && (
-                    <button
-                      className="text-muted-foreground hover:text-destructive"
-                      onClick={() => removeSite(s)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              ))}
             </div>
 
             {/* KPIs */}
@@ -318,11 +344,67 @@ export default function AdminDashboard() {
               </div>
             </section>
 
-            {/* Incoming / Outgoing */}
+            {/* Incoming / Outgoing editable lists */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <ShipmentCard title="Incoming Goods" shipments={incoming} accent="blue" />
-              <ShipmentCard title="Outgoing Goods" shipments={outgoing} accent="amber" />
+              <ShipmentList
+                title="Incoming Goods"
+                accent="blue"
+                shipments={incoming}
+                onChange={handleShipmentChange}
+                onRemove={removeShipment}
+              />
+              <ShipmentList
+                title="Outgoing Goods"
+                accent="amber"
+                shipments={outgoing}
+                onChange={handleShipmentChange}
+                onRemove={removeShipment}
+              />
             </div>
+
+            {/* Add shipment */}
+            <section className="border rounded-2xl p-4 bg-card/60 backdrop-blur space-y-3 shadow-sm">
+              <h3 className="font-semibold">Add Shipment</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                <select
+                  className="border rounded px-3 py-2 text-sm bg-background"
+                  value={newShipment.type}
+                  onChange={(e) => setNewShipment((p) => ({ ...p, type: e.target.value as Shipment["type"] }))}
+                >
+                  <option value="incoming">Incoming</option>
+                  <option value="outgoing">Outgoing</option>
+                </select>
+                <input
+                  className="border rounded px-3 py-2 text-sm bg-background"
+                  placeholder="Reference"
+                  value={newShipment.ref}
+                  onChange={(e) => setNewShipment((p) => ({ ...p, ref: e.target.value }))}
+                />
+                <input
+                  className="border rounded px-3 py-2 text-sm bg-background"
+                  placeholder={newShipment.type === "incoming" ? "ETA (YYYY-MM-DD)" : "ETD (YYYY-MM-DD)"}
+                  value={newShipment.type === "incoming" ? newShipment.eta : newShipment.etd}
+                  onChange={(e) =>
+                    setNewShipment((p) =>
+                      p.type === "incoming" ? { ...p, eta: e.target.value } : { ...p, etd: e.target.value }
+                    )
+                  }
+                />
+                <input
+                  type="number"
+                  className="border rounded px-3 py-2 text-sm bg-background"
+                  placeholder="Items"
+                  value={newShipment.items}
+                  onChange={(e) => setNewShipment((p) => ({ ...p, items: Number(e.target.value) || 0 }))}
+                />
+              </div>
+              <button
+                className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm rounded bg-primary text-primary-foreground hover:opacity-90"
+                onClick={addShipment}
+              >
+                <Plus className="w-4 h-4" /> Add Shipment to {site}
+              </button>
+            </section>
           </TabsContent>
 
           <TabsContent value="orders">
@@ -357,14 +439,19 @@ function KpiCard({
   );
 }
 
-function ShipmentCard({
+// Editable shipment list
+function ShipmentList({
   title,
   shipments,
   accent,
+  onChange,
+  onRemove,
 }: {
   title: string;
   shipments: Shipment[];
   accent: "blue" | "amber";
+  onChange: (id: string, field: keyof Shipment, value: string | number) => void;
+  onRemove: (id: string) => void;
 }) {
   const accentClass =
     accent === "blue"
@@ -379,20 +466,44 @@ function ShipmentCard({
       ) : (
         <div className="space-y-2">
           {shipments.map((s) => (
-            <div key={s.id} className="border rounded-lg p-3 bg-background flex flex-col gap-1">
+            <div key={s.id} className="border rounded-lg p-3 bg-background flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className={`text-[11px] px-2 py-1 rounded-full ${accentClass}`}>
                     {s.type === "incoming" ? "Incoming" : "Outgoing"}
                   </span>
-                  <span className="text-sm font-medium">{s.ref}</span>
+                  <input
+                    className="border rounded px-2 py-1 text-sm bg-background"
+                    value={s.ref}
+                    onChange={(e) => onChange(s.id, "ref", e.target.value)}
+                  />
                 </div>
-                <span className="text-xs text-muted-foreground">{s.site}</span>
+                <button className="text-muted-foreground hover:text-destructive" onClick={() => onRemove(s.id)} aria-label="Remove shipment" title="Remove shipment">
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
-              <div className="text-xs text-muted-foreground flex gap-4">
-                {s.eta && <span>ETA: {s.eta}</span>}
-                {s.etd && <span>ETD: {s.etd}</span>}
-                <span>Items: {s.items}</span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <input
+                  className="border rounded px-2 py-1 text-sm bg-background"
+                  placeholder="ETA"
+                  value={s.type === "incoming" ? s.eta || "" : ""}
+                  disabled={s.type !== "incoming"}
+                  onChange={(e) => onChange(s.id, "eta", e.target.value)}
+                />
+                <input
+                  className="border rounded px-2 py-1 text-sm bg-background"
+                  placeholder="ETD"
+                  value={s.type === "outgoing" ? s.etd || "" : ""}
+                  disabled={s.type !== "outgoing"}
+                  onChange={(e) => onChange(s.id, "etd", e.target.value)}
+                />
+                <input
+                  type="number"
+                  className="border rounded px-2 py-1 text-sm bg-background"
+                  placeholder="Items"
+                  value={s.items}
+                  onChange={(e) => onChange(s.id, "items", e.target.value)}
+                />
               </div>
             </div>
           ))}
