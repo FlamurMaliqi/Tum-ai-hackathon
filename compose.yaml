@@ -35,7 +35,7 @@ services:
       - POSTGRES_PASSWORD=artikel_pass
       - POSTGRES_DB=artikel_db
     ports:
-      - 5433:5432
+      - 5434:5432
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init:/docker-entrypoint-initdb.d
