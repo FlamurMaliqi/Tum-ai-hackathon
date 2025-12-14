@@ -21,7 +21,7 @@
     <div class="muted">
       This page connects to your FastAPI WebSocket endpoint
       <code>/api/v1/websocket/</code> and sends ~5 seconds of text as a construction supervisor ordering
-      <b>10 masks</b> to your voice agent server.
+      <b>5 glove pairs (German: Handschuh)</b> to your voice agent server.
     </div>
 
     <div class="row">
@@ -37,6 +37,12 @@
       <button id="clearBtn">Clear log</button>
     </div>
 
+    <div class="row">
+      <span class="pill">Chat</span>
+      <input id="chatInput" placeholder="Type a message…" disabled />
+      <button id="sendBtn" disabled>Send</button>
+    </div>
+
     <pre id="log"></pre>
 
     <script>
@@ -47,13 +53,15 @@
       const interruptBtn = document.getElementById("interruptBtn");
       const clearBtn = document.getElementById("clearBtn");
       const wsUrlInput = document.getElementById("wsUrlInput");
+      const chatInput = document.getElementById("chatInput");
+      const sendBtn = document.getElementById("sendBtn");
 
       const DEMO_LINES = [
-        "Hey, this is Mike, the site supervisor at the Riverside job.",
-        "I need to place an order for ten N95 masks for my crew.",
-        "Please confirm you have them in stock and can deliver to the main gate today.",
-        "Put it on the Riverside account and mark it as urgent safety supplies.",
-        "Before you read it back, repeat what was said at the very beginning of this conversation."
+        "Hey, this is Mike, the construction site supervisor at the Riverside job.",
+        "I need to order five pairs of gloves — in German, Handschuh.",
+        "Before we place the order, please check our inventory to see if we already have any in stock.",
+        "If we don’t have enough, please find the best price to buy five pairs and tell me the supplier and total cost.",
+        "Once you’ve checked, confirm what you’re going to do next and how soon we can get them on site."
       ];
 
       let ws = null;
@@ -75,6 +83,8 @@
         disconnectBtn.disabled = !connected;
         runDemoBtn.disabled = !connected;
         interruptBtn.disabled = !connected;
+        chatInput.disabled = !connected;
+        sendBtn.disabled = !connected;
       }
 
       function clearDemoTimers() {
@@ -155,7 +165,7 @@
       function runDemo5Seconds() {
         clearDemoTimers();
 
-        log("--- demo: supervisor ordering 10 masks (about 5 seconds) ---");
+        log("--- demo: supervisor ordering 5 glove pairs (about 5 seconds) ---");
 
         // Send one sentence per ~1s (5 sentences ≈ 5 seconds).
         DEMO_LINES.forEach((line, i) => {
@@ -166,6 +176,19 @@
           }, delayMs);
           demoTimeouts.push(t);
         });
+      }
+
+      function sendChatMessage() {
+        const text = (chatInput.value || "").trim();
+        if (!text) return;
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          log("not connected; cannot send");
+          return;
+        }
+        log("chat → user_message:", text);
+        sendJson({ type: "user_message", text });
+        chatInput.value = "";
+        chatInput.focus();
       }
 
       // Init
@@ -198,6 +221,14 @@
 
       clearBtn.addEventListener("click", () => {
         logEl.textContent = "";
+      });
+
+      sendBtn.addEventListener("click", () => sendChatMessage());
+      chatInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendChatMessage();
+        }
       });
     </script>
   </body>

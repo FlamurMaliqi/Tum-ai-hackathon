@@ -23,7 +23,9 @@ from typing import Optional
 from ..data_access.anthropic.agent import (
     stream_anthropic_response,
     stream_anthropic_response_with_history,
+    stream_anthropic_response_with_history_and_tools,
 )
+from .tools_service import TOOL_DEFINITIONS
 from . import message_history_service
 
 logger = logging.getLogger(__name__)
@@ -70,7 +72,7 @@ async def stream_claude_reply(
             )
             # Mirror the existing `agent.py` pattern (assistant placeholder).
             messages.append({"role": "assistant", "content": ""})
-            async for chunk in stream_anthropic_response_with_history(messages=messages):
+            async for chunk in stream_anthropic_response_with_history_and_tools(messages=messages, tools=TOOL_DEFINITIONS):
                 if chunk:
                     yield chunk
     except Exception as e:
