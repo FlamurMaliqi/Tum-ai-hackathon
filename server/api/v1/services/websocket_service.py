@@ -67,6 +67,13 @@ async def handle_websocket(ws: WebSocket) -> None:
 
     # A single websocket session maps to a single in-memory "conversation".
     conversation_id = ws.query_params.get("conversation_id") or uuid.uuid4().hex
+    
+    # Language for Claude and TTS (default to English, can be set via query param or message)
+    # Using a dict so nested functions can modify it without nonlocal issues
+    initial_lang = ws.query_params.get("language", "en")
+    if initial_lang not in ("en", "de"):
+        initial_lang = "en"
+    session_state = {"language": initial_lang}
 
     # Background task that streams the assistant response to the client.
     stream_task: Optional[asyncio.Task[None]] = None
@@ -122,7 +129,7 @@ async def handle_websocket(ws: WebSocket) -> None:
             # `stream_claude_reply()` yields text chunks as they arrive.
             async def claude_text_stream():
                 async for text in stream_claude_reply(
-                    user_text=user_text, conversation_id=conversation_id
+                    user_text=user_text, conversation_id=conversation_id, language=session_state["language"]
                 ):
                     if text:
                         assistant_text_parts.append(text)
@@ -131,7 +138,7 @@ async def handle_websocket(ws: WebSocket) -> None:
                         # Yield each chunk so ElevenLabs can synthesize streaming audio.
                         yield text
 
-            async for audio_chunk in stream_tts(claude_text_stream()):
+            async for audio_chunk in stream_tts(claude_text_stream(), language=session_state["language"]):
                 await ws.send_bytes(audio_chunk)
         except asyncio.CancelledError:
             # Important: re-raise so upstream cancellation is respected.
@@ -339,6 +346,16 @@ async def handle_websocket(ws: WebSocket) -> None:
                     async with turn_lock:
                         turn_buffer.clear()
                     await ws.send_json({"type": "server_message", "text": "interrupted"})
+                    continue
+
+                if msg_type == "set_language":
+                    # Allow client to change language mid-session
+                    new_lang = msg.get("language")
+                    if new_lang in ("en", "de"):
+                        session_state["language"] = new_lang
+                        await ws.send_json({"type": "language_changed", "language": session_state["language"]})
+                    else:
+                        await ws.send_json({"type": "error", "message": "invalid_language"})
                     continue
 
                 await ws.send_json({"type": "error", "message": "unknown_type"})

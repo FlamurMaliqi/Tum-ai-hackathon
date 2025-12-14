@@ -12,21 +12,34 @@ import base64
 import asyncio
 import websockets
 
-# Default voice - "Charlotte" (warm, sultry tone)
-DEFAULT_VOICE_ID = "XB0fDUnXU5powFXDhCwa"
+# Default voice - "Charlotte" (warm, sultry tone) - English
+DEFAULT_VOICE_ID_EN = "XB0fDUnXU5powFXDhCwa"
+# German voice - "Matilda" (multilingual, works well with German)
+DEFAULT_VOICE_ID_DE = "XrExE9yKIg1WjnnlVkGX"
 
 
-async def stream_tts(text_iterator):
+async def stream_tts(text_iterator, language: str = "en"):
     """
     Takes an async iterator of text chunks, yields audio chunks.
     
+    Args:
+        text_iterator: Async iterator yielding text chunks
+        language: Language code ("en" or "de")
+    
     Usage:
-        async for audio_bytes in stream_tts(claude_text_stream):
+        async for audio_bytes in stream_tts(claude_text_stream, language="de"):
             # send audio_bytes to client
     """
     api_key = os.getenv("ELEVENLABS_API_KEY")
-    voice_id = os.getenv("ELEVENLABS_VOICE_ID", DEFAULT_VOICE_ID)
-    model_id = "eleven_turbo_v2_5"  # Faster model
+    
+    # Select voice based on language
+    if language == "de":
+        default_voice = DEFAULT_VOICE_ID_DE
+    else:
+        default_voice = DEFAULT_VOICE_ID_EN
+    
+    voice_id = os.getenv("ELEVENLABS_VOICE_ID", default_voice)
+    model_id = "eleven_turbo_v2_5"  # Faster model (supports multilingual)
     
     uri = f"wss://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream-input?model_id={model_id}&output_format=mp3_44100_128"
     
@@ -34,7 +47,7 @@ async def stream_tts(text_iterator):
         # Send initial config (BOS - Beginning of Stream)
         await ws.send(json.dumps({
             "text": " ",
-            "voice_settings": {"stability": 0.7, "similarity_boost": 0.85, "speed": 1.2},
+            "voice_settings": {"stability": 0.7, "similarity_boost": 0.85, "speed": 1.15},
             "xi_api_key": api_key
         }))
         

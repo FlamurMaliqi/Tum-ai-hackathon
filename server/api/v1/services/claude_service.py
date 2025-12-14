@@ -36,7 +36,7 @@ class ClaudeServiceError(RuntimeError):
 
 
 async def stream_claude_reply(
-    *, user_text: str, conversation_id: Optional[str] = None
+    *, user_text: str, conversation_id: Optional[str] = None, language: str = "en"
 ) -> AsyncIterator[str]:
     """Stream assistant text for the provided user text.
 
@@ -44,6 +44,7 @@ async def stream_claude_reply(
         user_text: Full text for a single "turn" (already batched by the caller).
         conversation_id: Optional conversation id. When provided, the Anthropic call
             is made with full `messages=[...]` history from `message_history_service`.
+        language: Language code ("en" or "de") for the system prompt.
 
     Yields:
         Text chunks as they arrive from the provider.
@@ -61,7 +62,7 @@ async def stream_claude_reply(
     try:
         # NO message history is saved since no conversation_id is provided
         if conversation_id is None:
-            async for chunk in stream_anthropic_response(normalized):
+            async for chunk in stream_anthropic_response(normalized, language=language):
                 if chunk:
                     yield chunk
         # Message history is saved since a conversation_id is provided
@@ -71,7 +72,7 @@ async def stream_claude_reply(
                 tail_messages=40,
             )
             async for chunk in stream_anthropic_response_with_history_and_tools(
-                messages=messages, tools=TOOL_DEFINITIONS
+                messages=messages, tools=TOOL_DEFINITIONS, language=language
             ):
                 if chunk:
                     yield chunk
