@@ -149,155 +149,185 @@ export default function Voice() {
   }, [scribe]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background via-background to-primary/5 flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
-      <header className="flex items-center justify-between p-4 sticky top-0 z-10 glass">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/")} className="rounded-xl">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-lg font-semibold">CMats Assistent</h1>
-            <p className="text-xs text-muted-foreground">KI-Sprachbestellung</p>
+      <header className="border-b border-border bg-background">
+        <div className="flex items-center justify-between h-16 px-4 max-w-screen-xl mx-auto">
+          <div className="flex items-center gap-3">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => navigate("/")}
+              className="h-10 w-10"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div className="flex flex-col">
+              <h1 className="text-base font-semibold text-foreground leading-tight">
+                Voice Assistant
+              </h1>
+              <p className="text-xs text-muted-foreground leading-tight">
+                AI-powered ordering
+              </p>
+            </div>
           </div>
+          {orderItems.length > 0 && (
+            <Button 
+              onClick={handleAddToCart}
+              size="sm"
+              className="gap-2 h-9"
+            >
+              <ShoppingCart className="h-4 w-4" />
+              <span className="hidden sm:inline">Add to Cart</span>
+            </Button>
+          )}
         </div>
-        {orderItems.length > 0 && (
-          <Button onClick={handleAddToCart} className="rounded-xl gap-2">
-            <ShoppingCart className="h-4 w-4" />
-            In Warenkorb
-          </Button>
-        )}
       </header>
 
-      {/* Full Transcript Display */}
-      {fullTranscript.length > 0 && (
-        <div className="px-4 py-3 flex-shrink-0">
-          <p className="text-sm font-medium text-muted-foreground mb-2">Transkript</p>
-          <div className="bg-card rounded-xl p-3 card-shadow max-h-32 overflow-y-auto">
-            {fullTranscript.map((text, idx) => (
-              <p key={idx} className="text-sm mb-1">
-                {text}
-              </p>
-            ))}
+      {/* Content Area */}
+      <div className="flex-1 flex flex-col max-w-screen-xl w-full mx-auto">
+        {/* Transcript Section */}
+        {fullTranscript.length > 0 && (
+          <div className="px-4 pt-6 pb-4">
+            <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
+              Transcript
+            </h2>
+            <div className="bg-muted/30 border border-border rounded-lg p-4 max-h-32 overflow-y-auto">
+              <div className="space-y-2">
+                {fullTranscript.map((text, idx) => (
+                  <p key={idx} className="text-sm text-foreground leading-relaxed">
+                    {text}
+                  </p>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Order List */}
-      {orderItems.length > 0 && (
-        <div className="px-4 py-3 flex-shrink-0">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-medium text-muted-foreground">Ihre Bestellung</p>
-            <span className="text-xs text-muted-foreground bg-secondary px-2 py-1 rounded-full">
-              {orderItems.length} {orderItems.length === 1 ? "Artikel" : "Artikel"}
+        {/* Order List Section */}
+        {orderItems.length > 0 && (
+          <div className="px-4 pb-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Current Order
+              </h2>
+              <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+                {orderItems.length} {orderItems.length === 1 ? "item" : "items"}
+              </span>
+            </div>
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {orderItems.map((item) => (
+                <div
+                  key={item.productId}
+                  className="flex items-center justify-between bg-card border border-border rounded-lg p-3 transition-colors hover:bg-muted/50"
+                >
+                  <div className="flex-1 min-w-0 mr-4">
+                    <p className="font-medium text-sm text-foreground truncate">
+                      {item.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {item.unit}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => updateItemQuantity(item.productId, -10)}
+                      className="h-8 w-8 rounded border border-border bg-background flex items-center justify-center hover:bg-muted transition-colors"
+                      aria-label="Decrease quantity"
+                    >
+                      <Minus className="h-3.5 w-3.5" />
+                    </button>
+                    <span className="w-10 text-center font-medium text-sm tabular-nums">
+                      {item.quantity}
+                    </span>
+                    <button
+                      onClick={() => updateItemQuantity(item.productId, 10)}
+                      className="h-8 w-8 rounded border border-border bg-background flex items-center justify-center hover:bg-muted transition-colors"
+                      aria-label="Increase quantity"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => removeItem(item.productId)}
+                      className="h-8 w-8 rounded border border-destructive/20 bg-background text-destructive flex items-center justify-center hover:bg-destructive/10 transition-colors ml-1"
+                      aria-label="Remove item"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Voice Interface - Centered */}
+        <main className="flex-1 flex flex-col items-center justify-center px-4 py-12 min-h-[400px]">
+          {/* Status Text */}
+          <div className="text-center max-w-md mb-12">
+            <p className="text-base font-medium text-foreground leading-relaxed">
+              {currentText}
+            </p>
+            
+            {scribe.partialTranscript && (
+              <p className="text-sm text-primary mt-3 leading-relaxed">
+                {scribe.partialTranscript}
+              </p>
+            )}
+          </div>
+
+          {/* Voice Button */}
+          <div className="relative">
+            {/* Recording indicator ring */}
+            {isRecording && (
+              <div 
+                className="absolute inset-0 -m-3 rounded-full border-2 border-destructive/30 animate-pulse"
+                aria-hidden="true"
+              />
+            )}
+
+            {/* Main button */}
+            <button
+              onClick={handleToggleRecording}
+              disabled={scribe.isConnected && !isRecording}
+              className={`relative h-20 w-20 rounded-full flex items-center justify-center transition-all border-2 ${
+                isRecording
+                  ? "bg-destructive border-destructive hover:bg-destructive/90"
+                  : "bg-primary border-primary hover:bg-primary/90"
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              aria-label={isRecording ? "Stop recording" : "Start recording"}
+            >
+              {isRecording ? (
+                <MicOff className="h-8 w-8 text-primary-foreground" />
+              ) : (
+                <Mic className="h-8 w-8 text-primary-foreground" />
+              )}
+            </button>
+          </div>
+
+          {/* Status Indicator */}
+          <div className="mt-8 flex items-center gap-2">
+            <div
+              className={`h-1.5 w-1.5 rounded-full transition-colors ${
+                isRecording ? "bg-destructive" : "bg-muted-foreground/40"
+              }`}
+              aria-hidden="true"
+            />
+            <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+              {isRecording ? "Recording" : "Ready"}
             </span>
           </div>
-          <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
-            {orderItems.map((item) => (
-              <div
-                key={item.productId}
-                className="flex items-center justify-between bg-card rounded-xl p-3 card-shadow animate-fade-in"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{item.name}</p>
-                  <p className="text-xs text-muted-foreground">{item.unit}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => updateItemQuantity(item.productId, -10)}
-                    className="h-8 w-8 rounded-lg bg-secondary flex items-center justify-center active:scale-95 transition-transform"
-                  >
-                    <Minus className="h-4 w-4" />
-                  </button>
-                  <span className="w-12 text-center font-semibold text-sm">{item.quantity}</span>
-                  <button
-                    onClick={() => updateItemQuantity(item.productId, 10)}
-                    className="h-8 w-8 rounded-lg bg-secondary flex items-center justify-center active:scale-95 transition-transform"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => removeItem(item.productId)}
-                    className="h-8 w-8 rounded-lg bg-destructive/10 text-destructive flex items-center justify-center active:scale-95 transition-transform ml-1"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
-      {/* Main Voice Interface */}
-      <main className="flex-1 flex flex-col items-center justify-end px-6 pb-12">
-        {/* Status Text */}
-        <div className="text-center max-w-sm mb-8">
-          <p
-            className={`text-lg font-medium transition-all duration-300 ${
-              isRecording ? "text-foreground" : "text-muted-foreground"
-            }`}
-          >
-            {currentText}
-          </p>
-          
-          {/* Show partial transcript if available */}
-          {scribe.partialTranscript && (
-            <p className="text-sm text-primary mt-2 animate-pulse">
-              {scribe.partialTranscript}
+          {/* Instructions */}
+          <div className="mt-6 text-center max-w-md">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {isRecording
+                ? "Speak your order clearly. Click again to stop recording."
+                : "Click the microphone button to begin voice ordering."}
             </p>
-          )}
-        </div>
-
-        {/* Animated Orb */}
-        <div className="relative mb-6">
-          {/* Outer glow rings - only show when recording */}
-          {isRecording && (
-            <>
-              <div className="absolute inset-0 rounded-full bg-primary/20 scale-[1.8] animate-pulse" />
-              <div className="absolute inset-0 rounded-full bg-primary/30 scale-[1.4] animate-pulse" />
-            </>
-          )}
-
-          {/* Main orb button */}
-          <button
-            onClick={handleToggleRecording}
-            disabled={scribe.isConnected && !isRecording}
-            className={`relative h-24 w-24 rounded-full flex items-center justify-center transition-all duration-500 ${
-              isRecording
-                ? "bg-gradient-to-br from-destructive via-destructive/90 to-destructive/70 shadow-2xl shadow-destructive/40"
-                : "bg-gradient-to-br from-primary to-primary/80 shadow-xl shadow-primary/30"
-            }`}
-          >
-            {isRecording ? (
-              <MicOff className="h-10 w-10 text-primary-foreground" />
-            ) : (
-              <Mic className="h-10 w-10 text-primary-foreground" />
-            )}
-          </button>
-        </div>
-
-        {/* Status Indicator */}
-        <div className="mt-6 flex items-center gap-2">
-          <div
-            className={`h-2 w-2 rounded-full transition-all ${
-              isRecording ? "bg-destructive animate-pulse" : "bg-muted"
-            }`}
-          />
-          <span className="text-xs text-muted-foreground uppercase tracking-wider">
-            {isRecording ? "Aufnahme läuft" : "Bereit"}
-          </span>
-        </div>
-
-        {/* Instructions */}
-        <div className="mt-8 text-center max-w-md">
-          <p className="text-xs text-muted-foreground">
-            {isRecording
-              ? "Sprechen Sie Ihre Bestellung. Klicken Sie erneut, um zu stoppen."
-              : "Klicken Sie auf das Mikrofon, um mit der Sprachbestellung zu beginnen."}
-          </p>
-        </div>
-      </main>
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
