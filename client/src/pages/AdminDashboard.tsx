@@ -237,6 +237,121 @@ export default function AdminDashboard() {
               </div>
             </div>
 
+            {/* Inventory Cards - Mobile First Design */}
+            <section className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold">Current Inventory</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">Stock levels for {site}</p>
+                </div>
+              </div>
+
+              {filteredInventory.length === 0 ? (
+                <div className="border-2 border-dashed rounded-2xl p-8 bg-card/40 backdrop-blur text-center">
+                  <Package className="w-12 h-12 text-muted-foreground/50 mx-auto mb-3" />
+                  <p className="text-sm font-medium text-muted-foreground">No inventory for this site</p>
+                  <p className="text-xs text-muted-foreground/70 mt-1">Add items to get started</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {filteredInventory.map((item) => (
+                    <div
+                      key={item.sku}
+                      className="group relative border rounded-xl bg-card/60 backdrop-blur p-4 hover:shadow-md transition-all duration-200 hover:border-primary/30"
+                    >
+                      {/* SKU Badge */}
+                      <div className="flex items-start justify-between mb-3">
+                        <span className="px-2 py-1 rounded-md bg-primary/10 text-primary text-xs font-semibold">
+                          {item.sku}
+                        </span>
+                        <button
+                          className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all"
+                          onClick={() => removeInventoryItem(item.sku)}
+                          aria-label="Remove item"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Product Name */}
+                      <div className="mb-3">
+                        <input
+                          className="w-full font-semibold text-sm bg-transparent border-0 border-b-2 border-transparent focus:border-primary/50 focus:outline-none focus:ring-0 px-0 py-1 transition-colors"
+                          value={item.name}
+                          onChange={(e) => handleInventoryChange(item.sku, "name", e.target.value)}
+                          placeholder="Product name"
+                        />
+                      </div>
+
+                      {/* Quantity Display */}
+                      <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                        <span className="text-xs text-muted-foreground font-medium">Quantity</span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            className="w-20 text-right font-semibold text-base bg-muted/50 border border-border/50 rounded-lg px-2 py-1.5 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20 transition-all"
+                            value={item.qty}
+                            onChange={(e) => handleInventoryChange(item.sku, "qty", e.target.value)}
+                            min="0"
+                          />
+                          <span className="text-xs text-muted-foreground">units</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add Inventory Item - Mobile Optimized */}
+              <div className="border rounded-2xl bg-card/60 backdrop-blur p-4 space-y-3">
+                <h3 className="font-semibold text-sm flex items-center gap-2">
+                  <Plus className="w-4 h-4" />
+                  Add New Item
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">SKU</label>
+                    <input
+                      className="w-full border rounded-lg px-3 py-2.5 text-sm bg-background focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                      placeholder="e.g., ABC-123"
+                      value={newItem.sku}
+                      onChange={(e) => setNewItem((p) => ({ ...p, sku: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Product Name</label>
+                    <input
+                      className="w-full border rounded-lg px-3 py-2.5 text-sm bg-background focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                      placeholder="Product name"
+                      value={newItem.name}
+                      onChange={(e) => setNewItem((p) => ({ ...p, name: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Quantity</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        className="flex-1 border rounded-lg px-3 py-2.5 text-sm bg-background focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                        placeholder="0"
+                        value={newItem.qty || ""}
+                        onChange={(e) => setNewItem((p) => ({ ...p, qty: Number(e.target.value) || 0 }))}
+                        min="0"
+                      />
+                      <button
+                        className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm rounded-lg bg-primary text-primary-foreground hover:opacity-90 active:scale-95 transition-all font-medium shadow-sm"
+                        onClick={addInventoryItem}
+                        disabled={!newItem.sku || !newItem.name}
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span className="hidden sm:inline">Add</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
             {/* KPIs */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <KpiCard
@@ -258,95 +373,6 @@ export default function AdminDashboard() {
                 hint={`${outgoing.length || "No"} outbound`}
               />
             </div>
-
-            {/* Inventory table with edit/remove */}
-            <section className="border rounded-2xl p-4 bg-card/60 backdrop-blur space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="font-semibold">Current Inventory</h2>
-                  <p className="text-xs text-muted-foreground">Stock levels for {site}</p>
-                </div>
-              </div>
-              <div className="overflow-hidden rounded-lg border bg-background">
-                <table className="w-full text-sm md:text-base table-fixed">
-                  <thead className="bg-muted/50">
-                    <tr className="text-left text-muted-foreground">
-                      <th className="py-2 px-3 w-28">SKU</th>
-                      <th className="py-2 px-3 w-1/2">Name</th>
-                      <th className="py-2 px-3 w-24 text-right">Qty</th>
-                      <th className="py-2 px-3 w-20 text-right"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredInventory.length === 0 ? (
-                      <tr className="border-t">
-                        <td className="py-3 px-3 text-sm text-muted-foreground h-12" colSpan={4}>
-                          No inventory for this site.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredInventory.map((item) => (
-                        <tr key={item.sku} className="border-t">
-                          <td className="py-2 px-3 font-medium h-12">{item.sku}</td>
-                          <td className="py-2 px-3 h-12">
-                            <input
-                              className="w-full border rounded px-2 py-1 text-sm bg-background"
-                              value={item.name}
-                              onChange={(e) => handleInventoryChange(item.sku, "name", e.target.value)}
-                            />
-                          </td>
-                          <td className="py-2 px-3 h-12 text-right">
-                            <input
-                              type="number"
-                              className="w-20 border rounded px-2 py-1 text-sm text-right bg-background"
-                              value={item.qty}
-                              onChange={(e) => handleInventoryChange(item.sku, "qty", e.target.value)}
-                            />
-                          </td>
-                          <td className="py-2 px-3 h-12 text-right">
-                            <button
-                              className="text-muted-foreground hover:text-destructive"
-                              onClick={() => removeInventoryItem(item.sku)}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Add inventory item */}
-              <div className="flex flex-col md:flex-row gap-2 pt-2">
-                <input
-                  className="border rounded px-3 py-2 text-sm bg-background flex-1"
-                  placeholder="SKU"
-                  value={newItem.sku}
-                  onChange={(e) => setNewItem((p) => ({ ...p, sku: e.target.value }))}
-                />
-                <input
-                  className="border rounded px-3 py-2 text-sm bg-background flex-1"
-                  placeholder="Name"
-                  value={newItem.name}
-                  onChange={(e) => setNewItem((p) => ({ ...p, name: e.target.value }))}
-                />
-                <input
-                  type="number"
-                  className="border rounded px-3 py-2 text-sm bg-background w-24"
-                  placeholder="Qty"
-                  value={newItem.qty}
-                  onChange={(e) => setNewItem((p) => ({ ...p, qty: Number(e.target.value) || 0 }))}
-                />
-                <button
-                  className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm rounded bg-primary text-primary-foreground hover:opacity-90"
-                  onClick={addInventoryItem}
-                >
-                  <Plus className="w-4 h-4" /> Add Item
-                </button>
-              </div>
-            </section>
 
             {/* Incoming / Outgoing editable lists */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
