@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useCart } from "@/hooks/useCart";
 import { useLanguage } from "@/hooks/useLanguage";
-import { products } from "@/data/products";
+import { useArticles } from "@/hooks/useArticles";
 import { VoiceAssistant } from "@/components/VoiceAssistant";
 
 interface VoiceOrderItem {
@@ -19,6 +19,7 @@ export default function Voice() {
   const navigate = useNavigate();
   const { addItem } = useCart();
   const { language, toggleLanguage } = useLanguage();
+  const { data: products = [] } = useArticles();
   const [orderItems, setOrderItems] = useState<VoiceOrderItem[]>([]);
 
   // Update item quantity
